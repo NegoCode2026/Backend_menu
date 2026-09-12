@@ -192,8 +192,10 @@ public class EpaycoPaymentGateway implements PaymentGateway {
 
         if (customerId == null || pKey == null ||
                 customerId.isBlank() || pKey.isBlank()) {
-            log.warn("EPAYCO_CUSTOMER_ID o EPAYCO_P_KEY no configurados, omitiendo validación de firma");
-            return;
+            // Sin claves de firma NO se puede validar la autenticidad del webhook.
+            // Rechazar es más seguro que procesar un pago no verificado.
+            throw new BadRequestException(
+                    "EPAYCO_CUSTOMER_ID o EPAYCO_P_KEY no configurados: no se puede validar la firma del webhook");
         }
 
         if (receivedSignature == null || receivedSignature.isBlank()) {

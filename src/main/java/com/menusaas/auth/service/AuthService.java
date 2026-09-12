@@ -61,7 +61,9 @@ public class AuthService {
         String email = normalizeEmail(request.email());
 
         if (userRepository.existsByEmail(email)) {
-            throw new ConflictException("Ya existe una cuenta con este correo");
+            // Mensaje genérico: no confirmar si el correo ya está registrado
+            // (evita enumeración de cuentas por la respuesta del registro).
+            throw new BadRequestException("No se pudo completar el registro. Verifica los datos e inténtalo de nuevo.");
         }
         if (restaurantRepository.existsBySlug(request.slug())) {
             throw new ConflictException("El slug '" + request.slug() + "' ya está en uso");
@@ -166,7 +168,8 @@ public class AuthService {
         if (refreshToken == null || refreshToken.isBlank()) {
             return;
         }
-        refreshTokenRepository.findByToken(refreshToken)
+        // El token se guarda en BD hasheado (SHA-256), igual que en refresh(). Buscar el raw nunca lo encontraría.
+        refreshTokenRepository.findByToken(hashToken(refreshToken))
                 .ifPresent(stored -> {
                     stored.setRevoked(true);
                     refreshTokenRepository.save(stored);

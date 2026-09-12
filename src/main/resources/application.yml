@@ -15,7 +15,9 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # Perfil de desarrollo: además de db/migration incluye db/dev (seed demo).
+    # En producción (application-prod.yml) SOLO se ejecuta db/migration.
+    locations: classpath:db/migration,classpath:db/dev
     baseline-on-migrate: true
   servlet:
     multipart:
@@ -27,10 +29,9 @@ server:
 
 app:
   jwt:
-    # El secreto SOLO tiene fallback en desarrollo (perfil por defecto).
-    # En producción (perfil "prod") es OBLIGATORIO vía variable de entorno.
-    # Generar con: openssl rand -base64 64
-    secret: ${JWT_SECRET:Y2hhbmdlLW1lLWxvY2FsLW1lbnUtc2Fhcy1qd3Qtc2VjcmV0LXNlY3JldC1kZW1vLTIwMjYtMDgtMTg=}
+    # OBLIGATORIO en todos los ambientes (los tests lo inyectan dinámicamente).
+    # NO usar un valor hardcodeado: generarlo con: openssl rand -base64 64
+    secret: ${JWT_SECRET}
     access-token-ttl-minutes: ${JWT_ACCESS_TTL:15}
     refresh-token-ttl-hours: ${JWT_REFRESH_TTL_HOURS:24}
   cors:
@@ -42,6 +43,9 @@ app:
     cookies-secure: ${COOKIES_SECURE:false}
     signed-url-ttl-seconds: ${SIGNED_URL_TTL:3600}
     session-absolute-ttl-hours: ${SESSION_ABSOLUTE_TTL_HOURS:24}
+  rate-limiting:
+    # Máximo de peticiones por minuto a /api/auth/login, register y refresh (por IP).
+    auth-max-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
   payments:
     # Pasarela de pagos: ePayco Smart Checkout v2.
     # Si no se configuran las claves, el sistema opera en modo manual (solo dev/pruebas).

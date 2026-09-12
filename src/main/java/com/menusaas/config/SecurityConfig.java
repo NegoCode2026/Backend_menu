@@ -1,6 +1,7 @@
 package com.menusaas.config;
 
 import com.menusaas.auth.security.JwtAuthenticationFilter;
+import com.menusaas.shared.security.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +32,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final AppProperties appProperties;
 
     @Bean
@@ -53,7 +55,10 @@ public class SecurityConfig {
                         })
                         // Endpoints que se autentican con credenciales propias, pedidos públicos o firma
                         // criptográfica (webhook de ePayco).
-                        .ignoringRequestMatchers("/api/auth/login", "/api/auth/register", "/api/public/orders/**", "/api/webhooks/**"))
+                        // login/register NO se excluyen de CSRF: el SPA ejecuta bootstrapCsrf()
+                        // (GET /api/auth/csrf) antes, con lo que la cookie XSRF-TOKEN ya existe
+                        // y el interceptor la devuelve en X-XSRF-TOKEN. Esto mitiga el login CSRF.
+                        .ignoringRequestMatchers("/api/public/orders/**", "/api/webhooks/**"))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -76,6 +81,8 @@ public class SecurityConfig {
                         // El resto requiere autenticación
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // Rate limiting de auth (fuerza bruta en login/register, abuso en refresh)
+        http.addFilterBefore(rateLimitFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 
