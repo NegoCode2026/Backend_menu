@@ -28,6 +28,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final RestaurantRepository restaurantRepository;
     private final ProductRepository productRepository;
+    private final WhatsAppNotificationService whatsAppNotificationService;
 
     @Transactional
     public OrderResponse createPublicOrder(String slug, CreateOrderRequest request) {
@@ -127,7 +128,24 @@ public class OrderService {
         order.setStatus(newStatus);
         Order updated = orderRepository.save(order);
         log.info("Estado de pedido actualizado: id={}, num={}, nuevoEstado={}", updated.getId(), updated.getOrderNumber(), newStatus);
+
+        if (newStatus == OrderStatus.DELIVERED) {
+            try {
+                whatsAppNotificationService.sendOrderReadyNotification(updated);
+            } catch (Exception e) {
+                log.error("Error al notificar WhatsApp para pedido id={}: {}", updated.getId(), e.getMessage());
+            }
+        }
+
         return OrderResponse.from(updated);
+    }
+
+    @Transactional
+    public boolean notifyWhatsAppMine(Long id) {
+        Long restaurantId = SecurityUtils.currentRestaurantId();
+        Order order = orderRepository.findByIdAndRestaurantId(id, restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
+        return whatsAppNotificationService.sendOrderReadyNotification(order);
     }
 
     private String generatePrefix(String slug) {

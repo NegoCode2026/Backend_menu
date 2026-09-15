@@ -38,4 +38,12 @@ public class OrderController {
     public ApiResponse<OrderResponse> updateStatus(@PathVariable Long id, @Valid @RequestBody OrderStatusRequest request) {
         return ApiResponse.ok("Estado de pedido actualizado", orderService.updateStatusMine(id, request.status()));
     }
+
+    @Operation(summary = "Enviar notificación de WhatsApp de 'Pedido listo' al cliente")
+    @PostMapping("/{id}/notify-whatsapp")
+    public ApiResponse<Boolean> notifyWhatsApp(@PathVariable Long id) {
+        boolean sent = orderService.notifyWhatsAppMine(id);
+        String msg = sent ? "Notificación de WhatsApp enviada al cliente" : "No se pudo enviar la notificación (verifica el teléfono)";
+        return ApiResponse.ok(msg, sent);
+    }
 }

@@ -9,6 +9,7 @@ spring:
     password: ${DB_PASSWORD}
   flyway:
     locations: classpath:db/migration
+    repair-on-migrate: true  # TODO: quitar después del primer deploy exitoso
 
 server:
   port: ${PORT:8080}
