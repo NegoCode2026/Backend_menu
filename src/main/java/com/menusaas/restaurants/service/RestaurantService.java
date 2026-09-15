@@ -73,7 +73,9 @@ public class RestaurantService {
         }
         restaurant.setName(request.name().trim());
         restaurant.setSlug(slug);
-        restaurant.setLogoUrl(request.logoUrl());
+        if (request.logoUrl() != null) {
+            restaurant.setLogoUrl(signedUrlService.toStoredValue(request.logoUrl()));
+        }
         restaurant.setDescription(request.description());
         restaurant.setPhone(request.phone());
         restaurant.setAddress(request.address());

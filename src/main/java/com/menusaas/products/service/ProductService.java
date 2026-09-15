@@ -47,7 +47,7 @@ public class ProductService {
                 .name(request.name().trim())
                 .description(request.description())
                 .price(request.price())
-                .imageUrl(request.imageUrl())
+                .imageUrl(signedUrlService.toStoredValue(request.imageUrl()))
                 .available(request.available() == null || request.available())
                 .position(request.position() != null ? request.position() : 0)
                 .build();
@@ -63,7 +63,7 @@ public class ProductService {
         product.setName(request.name().trim());
         if (request.description() != null) product.setDescription(request.description());
         product.setPrice(request.price());
-        if (request.imageUrl() != null) product.setImageUrl(request.imageUrl());
+        if (request.imageUrl() != null) product.setImageUrl(signedUrlService.toStoredValue(request.imageUrl()));
         if (request.available() != null) product.setAvailable(request.available());
         if (request.position() != null) product.setPosition(request.position());
         return toResponse(productRepository.save(product));

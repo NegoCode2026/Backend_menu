@@ -59,6 +59,26 @@ public class SignedUrlService {
     }
 
     /**
+     * Convierte un valor aceptado por el cliente (fileId, URL firmada interna o
+     * URL externa) en el valor que se almacena en BD: un simple fileId sin firma,
+     * para que las imágenes no caduquen y el backend siempre las sirva firmadas.
+     */
+    public String toStoredValue(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        final String marker = "/api/public/files/";
+        int idx = trimmed.indexOf(marker);
+        if (idx >= 0) {
+            String rest = trimmed.substring(idx + marker.length());
+            int q = rest.indexOf('?');
+            return q >= 0 ? rest.substring(0, q) : rest;
+        }
+        return trimmed;
+    }
+
+    /**
      * Valida firma y expiración. Comparación en tiempo constante (evita timing attacks).
      */
     public boolean isValid(String fileId, long expiresAt, String signature) {
