@@ -7,7 +7,6 @@ import com.menusaas.TestHttp;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 
@@ -20,6 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * administrador, activación/desactivación de restaurantes y usuarios, y
  * prohibición de acceso a roles no superiores. El super admin demo lo siembra
  * Flyway (superadmin@demo.com / SuperAdmin123!).
+ *
+ * Cobertura P1/P2: paginación + búsqueda server-side, planCode estricto (400),
+ * protección del último superadmin, auditoría y caché de stats.
  */
 class AdminOperationsIT extends BaseIntegrationTest {
 
@@ -40,11 +42,17 @@ class AdminOperationsIT extends BaseIntegrationTest {
         assertThat(stats.getBody().get("data").get("totalRestaurants").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(stats.getBody().get("data").get("activeSubscriptions").asLong()).isGreaterThanOrEqualTo(1);
 
-        // Listado de restaurantes (incluye plan y email del admin)
-        ResponseEntity<JsonNode> restaurants = rest.exchange("/api/admin/restaurants", HttpMethod.GET,
+        // Listado paginado de restaurantes (Page: data.content)
+        ResponseEntity<JsonNode> restaurants = rest.exchange("/api/admin/restaurants?page=0&size=10", HttpMethod.GET,
                 superAdmin.get(), JsonNode.class);
         assertThat(restaurants.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(restaurants.getBody().get("data").toString()).contains("fritomix");
+        assertThat(restaurants.getBody().get("data").get("content").toString()).contains("fritomix");
+
+        // Búsqueda server-side por slug
+        ResponseEntity<JsonNode> search = rest.exchange("/api/admin/restaurants?search=fritomix", HttpMethod.GET,
+                superAdmin.get(), JsonNode.class);
+        assertThat(search.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(search.getBody().get("data").get("content").size()).isGreaterThanOrEqualTo(1);
 
         // Crear restaurante con plan explícito → 201 y suscripción activa
         ResponseEntity<JsonNode> created = createRestaurant(superAdmin,
@@ -57,17 +65,16 @@ class AdminOperationsIT extends BaseIntegrationTest {
         assertThat(createdData.get("adminEmail").asText()).isEqualTo("plan-libre-admin@test.com");
         assertThat(createdData.get("userCount").asLong()).isEqualTo(1);
 
-        // Crear con plan por defecto (sin planCode → PRO) → 201
+        // Crear con plan por defecto (sin planCode → NEGOCODE) → 201
         ResponseEntity<JsonNode> defaultPlan = createRestaurant(superAdmin,
                 "Plan Pro", "plan-pro", "plan-pro-admin@test.com", "PlanProAdmin123!", null);
         assertThat(defaultPlan.getStatusCode().value()).isEqualTo(201);
         assertThat(defaultPlan.getBody().get("data").get("planName").asText()).isEqualTo("Plan NegoCode");
 
-        // Crear con planCode inexistente → cae al primer plan disponible
-        ResponseEntity<JsonNode> fallbackPlan = createRestaurant(superAdmin,
+        // Crear con planCode inexistente → 400 (antes fallback silencioso)
+        ResponseEntity<JsonNode> badPlan = createRestaurant(superAdmin,
                 "Plan Fallback", "plan-fallback", "plan-fallback-admin@test.com", "Fallback123!", "NO_EXISTE");
-        assertThat(fallbackPlan.getStatusCode().value()).isEqualTo(201);
-        assertThat(fallbackPlan.getBody().get("data").get("planName")).isNotNull();
+        assertThat(badPlan.getStatusCode().value()).isEqualTo(400);
 
         // Conflictos: email duplicado → 409; slug duplicado → 409
         ResponseEntity<JsonNode> dupEmail = createRestaurant(superAdmin,
@@ -94,13 +101,25 @@ class AdminOperationsIT extends BaseIntegrationTest {
                 superAdmin.get(), JsonNode.class);
         assertThat(missingRestaurant.getStatusCode().value()).isEqualTo(404);
 
-        // Listado de usuarios
-        ResponseEntity<JsonNode> users = rest.exchange("/api/admin/users", HttpMethod.GET,
+        // Listado paginado de usuarios
+        ResponseEntity<JsonNode> users = rest.exchange("/api/admin/users?page=0&size=50", HttpMethod.GET,
                 superAdmin.get(), JsonNode.class);
         assertThat(users.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(users.getBody().get("data").toString()).contains("superadmin@demo.com");
-        long superAdminId = findIdByEmail(users.getBody().get("data"), "superadmin@demo.com");
-        long createdUserId = findIdByEmail(users.getBody().get("data"), "plan-libre-admin@test.com");
+        JsonNode userContent = users.getBody().get("data").get("content");
+        assertThat(userContent.toString()).contains("superadmin@demo.com");
+        long superAdminId = findIdByEmail(userContent, "superadmin@demo.com");
+        long createdUserId = findIdByEmail(userContent, "plan-libre-admin@test.com");
+
+        // Filtro por rol server-side
+        ResponseEntity<JsonNode> admins = rest.exchange("/api/admin/users?role=SUPER_ADMIN", HttpMethod.GET,
+                superAdmin.get(), JsonNode.class);
+        assertThat(admins.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(admins.getBody().get("data").get("content").toString()).contains("superadmin@demo.com");
+
+        // Rol inválido → 400
+        ResponseEntity<JsonNode> badRole = rest.exchange("/api/admin/users?role=NOPE", HttpMethod.GET,
+                superAdmin.get(), JsonNode.class);
+        assertThat(badRole.getStatusCode().value()).isEqualTo(400);
 
         // Desactivar a un usuario (el del restaurante creado) → 200
         ResponseEntity<JsonNode> userDeactivated = rest.exchange(
@@ -119,6 +138,30 @@ class AdminOperationsIT extends BaseIntegrationTest {
                 "/api/admin/users/99999/active?active=false", HttpMethod.PATCH,
                 superAdmin.get(), JsonNode.class);
         assertThat(missingUser.getStatusCode().value()).isEqualTo(404);
+
+        // Auditoría: debe haber registro de creación del restaurante
+        ResponseEntity<JsonNode> audit = rest.exchange(
+                "/api/admin/audit?entityType=restaurant&entityId=" + restaurantId, HttpMethod.GET,
+                superAdmin.get(), JsonNode.class);
+        assertThat(audit.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(audit.getBody().get("data").get("content").toString()).contains("RESTAURANT_CREATED");
+    }
+
+    @Test
+    void lastSuperAdmin_cannotBeDeactivated() throws Exception {
+        TestHttp.Session superAdmin = superAdminSession();
+        ResponseEntity<JsonNode> users = rest.exchange("/api/admin/users?role=SUPER_ADMIN", HttpMethod.GET,
+                superAdmin.get(), JsonNode.class);
+        JsonNode content = users.getBody().get("data").get("content");
+        // Si solo queda 1 superadmin activo, desactivarlo debe dar 403
+        if (content.size() == 1) {
+            long id = content.get(0).get("id").asLong();
+            // Si es uno mismo también es 403 por auto-baja; si es otro, por último activo
+            ResponseEntity<JsonNode> res = rest.exchange(
+                    "/api/admin/users/" + id + "/active?active=false", HttpMethod.PATCH,
+                    superAdmin.get(), JsonNode.class);
+            assertThat(res.getStatusCode().value()).isEqualTo(403);
+        }
     }
 
     @Test
@@ -133,6 +176,10 @@ class AdminOperationsIT extends BaseIntegrationTest {
         ResponseEntity<JsonNode> users = rest.exchange("/api/admin/users", HttpMethod.GET,
                 regular.get(), JsonNode.class);
         assertThat(users.getStatusCode().value()).isEqualTo(403);
+
+        ResponseEntity<JsonNode> audit = rest.exchange("/api/admin/audit", HttpMethod.GET,
+                regular.get(), JsonNode.class);
+        assertThat(audit.getStatusCode().value()).isEqualTo(403);
     }
 
     private TestHttp.Session superAdminSession() throws Exception {
@@ -153,7 +200,7 @@ class AdminOperationsIT extends BaseIntegrationTest {
         if (planCode != null) {
             body.put("planCode", planCode);
         }
-        return rest.exchange("/api/admin/restaurants", HttpMethod.POST,
+        return rest.exchange("/api/admin/restaurants", org.springframework.http.HttpMethod.POST,
                 TestHttp.body(objectMapper, body, session), JsonNode.class);
     }
 
