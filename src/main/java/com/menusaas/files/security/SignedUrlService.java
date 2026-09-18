@@ -48,7 +48,14 @@ public class SignedUrlService {
             return null;
         }
         String trimmed = stored.trim();
-        if (trimmed.contains("://") || trimmed.startsWith("/")) {
+        // Si es una URL interna (contiene /api/public/files/), extraemos el fileId y re-firmamos
+        // con expiración actual para garantizar que la firma siempre sea válida y fresca.
+        if (trimmed.contains("/api/public/files/")) {
+            String fileId = toStoredValue(trimmed);
+            return buildSignedUrl(fileId);
+        }
+        // Si es una URL externa legítima (p. ej. Cloudinary, Unsplash, etc.) o ruta absoluta de asset
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("//") || trimmed.startsWith("/")) {
             return trimmed;
         }
         // Nombre de archivo simple (fileId) → URL firmada con expiración.
