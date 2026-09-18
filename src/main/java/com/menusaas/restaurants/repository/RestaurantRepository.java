@@ -2,6 +2,8 @@ package com.menusaas.restaurants.repository;
 
 import com.menusaas.restaurants.entity.Restaurant;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -28,4 +30,15 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
     java.util.List<Restaurant> findAllByOrderByIdDesc();
 
     java.util.List<Restaurant> findAllByActiveTrueOrderByNameAsc();
+
+    @Query("""
+            select r from Restaurant r
+            where (:active is null or r.active = :active)
+              and (:search is null or :search = ''
+                or lower(r.name) like lower(concat('%', :search, '%'))
+                or lower(r.slug) like lower(concat('%', :search, '%')))
+            """)
+    Page<Restaurant> search(@Param("search") String search,
+                            @Param("active") Boolean active,
+                            Pageable pageable);
 }

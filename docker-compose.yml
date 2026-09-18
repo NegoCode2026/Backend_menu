@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: menu-saas-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-menu_saas}
+      POSTGRES_USER: ${DB_USER:-menu_saas}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-menu_saas}
+    ports:
+      # 5433 en el host para no chocar con un Postgres local en 5432.
+      # La app dentro de la red Docker usa db:5432 (ver DB_URL abajo).
+      - "${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-menu_saas} -d ${DB_NAME:-menu_saas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build: .
+    container_name: menu-saas-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_HOST_PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      PORT: 8080
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-menu_saas}
+      DB_USER: ${DB_USER:-menu_saas}
+      DB_PASSWORD: ${DB_PASSWORD:-menu_saas}
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET es obligatorio. Genera uno con openssl rand -base64 64}"
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15}
+      JWT_REFRESH_TTL_HOURS: ${JWT_REFRESH_TTL_HOURS:-24}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:3000,http://localhost:8080}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:4200}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+      UPLOAD_DIR: /app/uploads
+      COOKIES_SECURE: ${COOKIES_SECURE:-false}
+      SIGNED_URL_TTL: ${SIGNED_URL_TTL:-3600}
+      SESSION_ABSOLUTE_TTL_HOURS: ${SESSION_ABSOLUTE_TTL_HOURS:-24}
+      AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-20}
+      EPAYCO_PUBLIC_KEY: ${EPAYCO_PUBLIC_KEY:-}
+      EPAYCO_PRIVATE_KEY: ${EPAYCO_PRIVATE_KEY:-}
+      EPAYCO_CUSTOMER_ID: ${EPAYCO_CUSTOMER_ID:-}
+      EPAYCO_P_KEY: ${EPAYCO_P_KEY:-}
+    volumes:
+      # Persiste las imágenes/subidas en ./uploads del host.
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  pgdata:

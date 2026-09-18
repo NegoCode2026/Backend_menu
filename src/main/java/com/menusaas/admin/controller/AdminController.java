@@ -1,17 +1,20 @@
 package com.menusaas.admin.controller;
 
 import com.menusaas.admin.dto.*;
+import com.menusaas.admin.entity.AuditLog;
+import com.menusaas.admin.repository.AuditLogRepository;
 import com.menusaas.admin.service.AdminService;
 import com.menusaas.shared.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Tag(name = "Admin", description = "Gestión global del SaaS (solo SUPER_ADMIN)")
 @RestController
@@ -21,17 +24,21 @@ import java.util.List;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AuditLogRepository auditLogRepository;
 
-    @Operation(summary = "Métricas globales de la plataforma")
+    @Operation(summary = "Métricas globales de la plataforma (cache 30s)")
     @GetMapping("/stats")
     public ApiResponse<AdminStatsResponse> getStats() {
         return ApiResponse.ok(adminService.getStats());
     }
 
-    @Operation(summary = "Listar todos los restaurantes registrados")
+    @Operation(summary = "Listar restaurantes con paginación y búsqueda (?search=&active=&page=&size=)")
     @GetMapping("/restaurants")
-    public ApiResponse<List<AdminRestaurantResponse>> listRestaurants() {
-        return ApiResponse.ok(adminService.listRestaurants());
+    public ApiResponse<Page<AdminRestaurantResponse>> listRestaurants(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean active,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        return ApiResponse.ok(adminService.listRestaurants(search, active, pageable));
     }
 
     @Operation(summary = "Crear un nuevo restaurante y su usuario administrador")
@@ -48,10 +55,14 @@ public class AdminController {
         return ApiResponse.ok(active ? "Restaurante activado" : "Restaurante desactivado");
     }
 
-    @Operation(summary = "Listar todos los usuarios de la plataforma")
+    @Operation(summary = "Listar usuarios con paginación y filtros (?search=&role=&active=&page=&size=)")
     @GetMapping("/users")
-    public ApiResponse<List<AdminUserResponse>> listUsers() {
-        return ApiResponse.ok(adminService.listUsers());
+    public ApiResponse<Page<AdminUserResponse>> listUsers(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) Boolean active,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        return ApiResponse.ok(adminService.listUsers(search, role, active, pageable));
     }
 
     @Operation(summary = "Activar o desactivar un usuario de la plataforma")
@@ -59,5 +70,17 @@ public class AdminController {
     public ApiResponse<Void> toggleUserActive(@PathVariable Long id, @RequestParam boolean active) {
         adminService.toggleUserActive(id, active);
         return ApiResponse.ok(active ? "Usuario activado" : "Usuario desactivado");
+    }
+
+    @Operation(summary = "Ver auditoría global o por entidad (?entityType=&entityId=)")
+    @GetMapping("/audit")
+    public ApiResponse<Page<AuditLog>> listAudit(
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) Long entityId,
+            @PageableDefault(size = 50, sort = "createdAt") Pageable pageable) {
+        if (entityType != null && entityId != null) {
+            return ApiResponse.ok(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable));
+        }
+        return ApiResponse.ok(auditLogRepository.findAllByOrderByCreatedAtDesc(pageable));
     }
 }
