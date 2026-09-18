@@ -51,6 +51,7 @@ public class Restaurant {
     @Column(length = 120)
     private String facebook;
 
+    @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
 
@@ -58,6 +59,7 @@ public class Restaurant {
      * Interruptor de servicio: el dueño lo apaga para dejar de recibir
      * pedidos (cerrado). No afecta la visibilidad del menu publico.
      */
+    @Builder.Default
     @Column(name = "open", nullable = false)
     private boolean open = true;
 

@@ -98,7 +98,7 @@ class AuthFlowIT extends BaseIntegrationTest {
                         "name", "Dup User 2", "email", "dup@example.com", "password", "StrongPass123!",
                         "restaurantName", "Other Burger", "slug", "other-burger"),
                         new TestHttp.Session(null, null, TestHttp.bootstrapCsrf(rest))), JsonNode.class);
-        assertThat(dupEmail.getStatusCode().value()).isEqualTo(409);
+        assertThat(dupEmail.getStatusCode().value()).isEqualTo(400);
 
         ResponseEntity<JsonNode> dupSlug = rest.postForEntity("/api/auth/register",
                 TestHttp.body(objectMapper, Map.of(

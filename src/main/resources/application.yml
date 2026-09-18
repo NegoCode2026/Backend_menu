@@ -16,8 +16,7 @@ spring:
   flyway:
     enabled: true
     # Perfil de desarrollo: además de db/migration incluye db/dev (seed demo).
-    # En producción (application-prod.yml) SOLO se ejecuta db/migration.
-    locations: classpath:db/migration,classpath:db/dev
+    locations: "classpath:db/migration,classpath:db/dev"
     baseline-on-migrate: true
   servlet:
     multipart:

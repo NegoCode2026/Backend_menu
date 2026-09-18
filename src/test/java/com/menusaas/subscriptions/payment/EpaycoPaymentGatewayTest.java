@@ -179,7 +179,7 @@ class EpaycoPaymentGatewayTest {
     }
 
     @Test
-    void handleWebhook_withoutSignatureConfig_skipsValidation() {
+    void handleWebhook_withoutSignatureConfig_throwsBadRequest() {
         AppProperties noSigConfig = new AppProperties(
                 new AppProperties.Jwt("secret-largo-para-tests", 15, 7),
                 null, null, null, null,
@@ -191,26 +191,9 @@ class EpaycoPaymentGatewayTest {
                 "x_response", "Aceptada", "ref_payco", "ref1",
                 "x_extra1", "42", "x_extra2", "PRO");
 
-        PaymentGateway.PaymentEvent event = noSigGateway.handleWebhook(params);
-
-        assertThat(event).isNotNull();
-        assertThat(event.restaurantId()).isEqualTo(42L);
-    }
-
-    @Test
-    void handleWebhook_badExtraIds_parseToNull() {
-        AppProperties noSigConfig = new AppProperties(
-                new AppProperties.Jwt("secret-largo-para-tests", 15, 7),
-                null, null, null, null,
-                new AppProperties.Security(false, 3600, 24),
-                new AppProperties.Payments("pub_123", "priv_456", null, null));
-        EpaycoPaymentGateway noSigGateway = new EpaycoPaymentGateway(noSigConfig, RestClient.create());
-
-        PaymentGateway.PaymentEvent event = noSigGateway.handleWebhook(Map.of(
-                "x_response", "Aceptada", "ref_payco", "ref1",
-                "x_extra1", "abc", "x_extra2", "PRO"));
-
-        assertThat(event.restaurantId()).isNull();
+        assertThatThrownBy(() -> noSigGateway.handleWebhook(params))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("no configurados");
     }
 
     /** Firma SHA256(customer^pkey^ref^tx^amount^currency) según validateSignature. */

@@ -3,3 +3,12 @@ logging:
     org.springframework.security: DEBUG
     org.springframework.security.web.csrf: TRACE
     org.springframework.web: DEBUG
+
+app:
+  rate-limiting:
+    auth-max-per-minute: 1000
+  payments:
+    epayco-public-key: ""
+    epayco-private-key: ""
+    epayco-customer-id: ""
+    epayco-p-key: ""
