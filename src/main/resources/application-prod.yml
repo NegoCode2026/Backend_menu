@@ -3,6 +3,10 @@
 # la aplicación FALLA AL ARRANCAR (fail-fast) en lugar de arrancar insegura.
 
 spring:
+  data:
+    web:
+      pageable:
+        serialization-mode: VIA_DTO
   datasource:
     url: ${DB_URL}
     username: ${DB_USER}

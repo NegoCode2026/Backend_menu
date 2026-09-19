@@ -1,4 +1,8 @@
 spring:
+  data:
+    web:
+      pageable:
+        serialization-mode: VIA_DTO
   application:
     name: menu-saas-backend
   datasource:
