@@ -30,7 +30,7 @@ public class Restaurant {
     @Column(nullable = false, unique = true, length = 120)
     private String slug;
 
-    @Column(name = "logo_url", length = 500)
+    @Column(name = "logo_url", columnDefinition = "text")
     private String logoUrl;
 
     @Column(columnDefinition = "text")

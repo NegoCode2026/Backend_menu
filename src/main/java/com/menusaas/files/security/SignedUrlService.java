@@ -37,7 +37,7 @@ public class SignedUrlService {
         if (fileId == null || fileId.isBlank()) {
             return null;
         }
-        if (fileId.startsWith("http://") || fileId.startsWith("https://") || fileId.startsWith("//")) {
+        if (fileId.startsWith("data:image/") || fileId.startsWith("http://") || fileId.startsWith("https://") || fileId.startsWith("//")) {
             return fileId;
         }
         long expiresAt = Instant.now().plusSeconds(ttlSeconds).getEpochSecond();
@@ -47,13 +47,17 @@ public class SignedUrlService {
 
     /**
      * Convierte el valor almacenado en BD a una URL firmada (o lo devuelve tal cual
-     * si es una URL externa legítima cargada por el cliente).
+     * si es una cadena Base64 Data URI o URL externa legítima cargada por el cliente).
      */
     public String toSignedUrlOrNull(String stored) {
         if (stored == null || stored.isBlank()) {
             return null;
         }
         String trimmed = stored.trim();
+        // Base64 Data URI
+        if (trimmed.startsWith("data:image/")) {
+            return trimmed;
+        }
         // Si es una URL interna (contiene /api/public/files/), extraemos el fileId y re-firmamos
         // con expiración actual para garantizar que la firma siempre sea válida y fresca.
         if (trimmed.contains("/api/public/files/")) {
@@ -72,15 +76,17 @@ public class SignedUrlService {
     }
 
     /**
-     * Convierte un valor aceptado por el cliente (fileId, URL firmada interna o
-     * URL externa) en el valor que se almacena en BD: un simple fileId sin firma,
-     * para que las imágenes no caduquen y el backend siempre las sirva firmadas.
+     * Convierte un valor aceptado por el cliente (Base64 Data URI, fileId, URL firmada interna o
+     * URL externa) en el valor que se almacena en BD.
      */
     public String toStoredValue(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String trimmed = value.trim();
+        if (trimmed.startsWith("data:image/")) {
+            return trimmed;
+        }
         final String marker = "/api/public/files/";
         int idx = trimmed.indexOf(marker);
         if (idx >= 0) {

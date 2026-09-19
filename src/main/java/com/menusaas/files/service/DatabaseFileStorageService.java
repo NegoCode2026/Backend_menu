@@ -73,13 +73,6 @@ public class DatabaseFileStorageService implements FileStorageService {
             log.info("Imagen guardada en base de datos PostgreSQL: fileId={}, size={} bytes, contentType={}",
                     fileId, bytes.length, detectedType);
 
-            // Guardar copia local como respaldo si la carpeta existe
-            try {
-                localFileStorageService.storeDirect(fileId, bytes);
-            } catch (Exception ex) {
-                log.warn("Copia en disco local no creada para fileId={}, continuando con BD: {}", fileId, ex.getMessage());
-            }
-
             return fileId;
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo leer el archivo cargado", ex);
@@ -89,7 +82,21 @@ public class DatabaseFileStorageService implements FileStorageService {
     @Override
     @Transactional(readOnly = true)
     public StoredFile load(String fileId) {
-        if (fileId == null || !fileId.matches("[A-Za-z0-9._-]+")) {
+        if (fileId == null) {
+            throw new BadRequestException("Identificador de archivo inválido");
+        }
+
+        if (fileId.startsWith("data:image/")) {
+            int commaIdx = fileId.indexOf(',');
+            if (commaIdx > 0) {
+                String header = fileId.substring(5, commaIdx); // e.g. image/png;base64
+                String contentType = header.split(";")[0];
+                byte[] bytes = java.util.Base64.getDecoder().decode(fileId.substring(commaIdx + 1));
+                return new StoredFile(fileId, bytes, contentType);
+            }
+        }
+
+        if (!fileId.matches("[A-Za-z0-9._-]+")) {
             throw new BadRequestException("Identificador de archivo inválido");
         }
 
