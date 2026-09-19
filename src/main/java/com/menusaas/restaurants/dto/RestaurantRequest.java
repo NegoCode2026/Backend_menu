@@ -17,7 +17,6 @@ public record RestaurantRequest(
         @Size(max = 120, message = "El slug no puede superar 120 caracteres")
         String slug,
 
-        @Size(max = 500, message = "La URL del logo no puede superar 500 caracteres")
         String logoUrl,
 
         @Size(max = 2000, message = "La descripción no puede superar 2000 caracteres")

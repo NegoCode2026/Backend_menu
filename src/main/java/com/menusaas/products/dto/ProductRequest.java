@@ -22,7 +22,6 @@ public record ProductRequest(
         @DecimalMin(value = "0.00", message = "El precio no puede ser negativo")
         BigDecimal price,
 
-        @Size(max = 500, message = "La URL de la imagen no puede superar 500 caracteres")
         String imageUrl,
 
         Boolean available,
