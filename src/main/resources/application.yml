@@ -52,6 +52,11 @@ app:
     epayco-private-key: ${EPAYCO_PRIVATE_KEY:}
     epayco-customer-id: ${EPAYCO_CUSTOMER_ID:}
     epayco-p-key: ${EPAYCO_P_KEY:}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    url: ${CLOUDINARY_URL:}
 
 springdoc:
   swagger-ui:

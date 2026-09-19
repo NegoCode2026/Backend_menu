@@ -79,6 +79,17 @@ public class LocalFileStorageService implements FileStorageService {
         }
     }
 
+    public void storeDirect(String fileId, byte[] bytes) {
+        if (fileId == null || !fileId.matches("[A-Za-z0-9._-]+")) return;
+        try {
+            Path target = uploadRoot.resolve(fileId).normalize();
+            if (target.startsWith(uploadRoot)) {
+                Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     @Override
     @Deprecated
     public StoredFile load(String fileId) {

@@ -16,7 +16,8 @@ public record AppProperties(
         String apiBaseUrl,
         String uploadDir,
         Security security,
-        Payments payments
+        Payments payments,
+        Cloudinary cloudinary
 ) {
 
     public AppProperties {
@@ -26,6 +27,7 @@ public record AppProperties(
         if (cors == null) cors = new Cors(new ArrayList<>());
         if (security == null) security = new Security(false, 3600, 24);
         if (payments == null) payments = new Payments(null, null, null, null);
+        if (cloudinary == null) cloudinary = new Cloudinary(null, null, null, null);
     }
 
     public record Jwt(
@@ -71,5 +73,22 @@ public record AppProperties(
             String epaycoCustomerId,
             String epaycoPKey
     ) {
+    }
+
+    /**
+     * Cloudinary: Almacenamiento externo de imágenes en la nube.
+     */
+    public record Cloudinary(
+            String cloudName,
+            String apiKey,
+            String apiSecret,
+            String url
+    ) {
+        public boolean isConfigured() {
+            return (cloudName != null && !cloudName.isBlank()
+                    && apiKey != null && !apiKey.isBlank()
+                    && apiSecret != null && !apiSecret.isBlank())
+                    || (url != null && !url.isBlank());
+        }
     }
 }

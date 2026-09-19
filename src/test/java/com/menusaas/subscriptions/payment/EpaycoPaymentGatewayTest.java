@@ -37,7 +37,8 @@ class EpaycoPaymentGatewayTest {
             new AppProperties.Cors(java.util.List.of("http://localhost:4200")),
             "http://localhost:4200", "http://localhost:8080", "./uploads",
             new AppProperties.Security(false, 3600, 24),
-            new AppProperties.Payments("pub_123", "priv_456", "1000", "pkey_abc"));
+            new AppProperties.Payments("pub_123", "priv_456", "1000", "pkey_abc"),
+            null);
 
     @BeforeEach
     void setUp() {
@@ -61,7 +62,8 @@ class EpaycoPaymentGatewayTest {
                 new AppProperties.Jwt("secret-largo-para-tests", 15, 7),
                 null, null, null, null,
                 new AppProperties.Security(false, 3600, 24),
-                new AppProperties.Payments(null, null, null, null));
+                new AppProperties.Payments(null, null, null, null),
+                null);
         assertThat(new EpaycoPaymentGateway(noKey).isConfigured()).isFalse();
     }
 
@@ -91,7 +93,8 @@ class EpaycoPaymentGatewayTest {
                 new AppProperties.Jwt("secret-largo-para-tests", 15, 7),
                 null, null, null, null,
                 new AppProperties.Security(false, 3600, 24),
-                new AppProperties.Payments("pub_123", null, null, null));
+                new AppProperties.Payments("pub_123", null, null, null),
+                null);
         EpaycoPaymentGateway noCredsGateway = new EpaycoPaymentGateway(noCreds, RestClient.create());
 
         assertThatThrownBy(() -> noCredsGateway.createCheckout(42L, plan(), "u1", "u2"))
@@ -184,7 +187,8 @@ class EpaycoPaymentGatewayTest {
                 new AppProperties.Jwt("secret-largo-para-tests", 15, 7),
                 null, null, null, null,
                 new AppProperties.Security(false, 3600, 24),
-                new AppProperties.Payments("pub_123", "priv_456", null, null));
+                new AppProperties.Payments("pub_123", "priv_456", null, null),
+                null);
         EpaycoPaymentGateway noSigGateway = new EpaycoPaymentGateway(noSigConfig, RestClient.create());
 
         Map<String, String> params = Map.of(

@@ -34,6 +34,12 @@ public class SignedUrlService {
      * Construye una URL firmada con expiración para un fileId almacenado.
      */
     public String buildSignedUrl(String fileId) {
+        if (fileId == null || fileId.isBlank()) {
+            return null;
+        }
+        if (fileId.startsWith("http://") || fileId.startsWith("https://") || fileId.startsWith("//")) {
+            return fileId;
+        }
         long expiresAt = Instant.now().plusSeconds(ttlSeconds).getEpochSecond();
         String signature = sign(fileId, expiresAt);
         return apiBaseUrl + "/api/public/files/" + fileId + "?exp=" + expiresAt + "&sig=" + signature;
