@@ -6,7 +6,7 @@ import com.menusaas.shared.api.BadRequestException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.PathResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -19,9 +19,6 @@ import java.util.concurrent.TimeUnit;
 /**
  * Sirve imágenes con URL firmada: la URL lleva expiración + firma HMAC.
  * Sin una firma válida y vigente NO se puede acceder, incluso adivinando el fileId.
- *
- * Usa Resource (PathResource) en lugar de byte[] para streaming eficiente:
- * Spring copia el archivo por chunks al response sin cargarlo entero en heap.
  */
 @Tag(name = "Files", description = "Acceso público a imágenes mediante URLs firmadas")
 @RestController
@@ -32,7 +29,7 @@ public class PublicFileController {
     private final FileStorageService fileStorageService;
     private final SignedUrlService signedUrlService;
 
-    @Operation(summary = "Servir imagen con URL firmada (expiración + HMAC) — streaming eficiente")
+    @Operation(summary = "Servir imagen con URL firmada (expiración + HMAC)")
     @GetMapping("/{fileId}")
     public ResponseEntity<Resource> serve(@PathVariable String fileId,
                                           @RequestParam long exp,
@@ -41,14 +38,16 @@ public class PublicFileController {
             throw new BadRequestException("Enlace de imagen inválido o expirado");
         }
 
-        // Obtiene el Path del archivo sin leer sus bytes (streaming)
-        java.nio.file.Path filePath = fileStorageService.resolvePath(fileId);
-        Resource resource = new PathResource(filePath);
-
-        String contentType = fileStorageService.contentTypeForId(fileId);
+        FileStorageService.StoredFile storedFile = fileStorageService.load(fileId);
+        Resource resource = new ByteArrayResource(storedFile.content()) {
+            @Override
+            public String getFilename() {
+                return fileId;
+            }
+        };
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
+                .contentType(MediaType.parseMediaType(storedFile.contentType()))
                 .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileId + "\"")
                 .body(resource);
