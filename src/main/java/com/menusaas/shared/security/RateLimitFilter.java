@@ -14,9 +14,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 /**
- * Limita la tasa de peticiones a los endpoints de autenticación por IP,
- * mitigando fuerza bruta sobre login/register y abuso sobre refresh.
- * Detrás de Traefik se confía en X-Forwarded-For; el primer valor es el
+ * Limita la tasa de peticiones por IP en puntos de entrada sensibles:
+ * autenticación (fuerza bruta) y creación de pedidos públicos (abuso/spam).
+ * Detrás de un proxy se confía en X-Forwarded-For; el primer valor es el
  * cliente real que inyectó el proxy.
  */
 @Component
@@ -28,13 +28,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/refresh"
     );
 
+    private static final String PUBLIC_ORDERS_PREFIX = "/api/public/orders/";
+
     private final RateLimiter rateLimiter;
     private final int maxPerMinute;
+    private final int publicOrdersMaxPerMinute;
 
     public RateLimitFilter(RateLimiter rateLimiter,
-                           @Value("${app.rate-limiting.auth-max-per-minute:20}") int maxPerMinute) {
+                           @Value("${app.rate-limiting.auth-max-per-minute:20}") int maxPerMinute,
+                           @Value("${app.rate-limiting.public-orders-max-per-minute:10}") int publicOrdersMaxPerMinute) {
         this.rateLimiter = rateLimiter;
         this.maxPerMinute = maxPerMinute;
+        this.publicOrdersMaxPerMinute = publicOrdersMaxPerMinute;
     }
 
     @Override
@@ -42,6 +47,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String path = request.getRequestURI()
                 .replaceAll("^/api", "/api")
                 .replaceAll("/+$", "");
+        if ("POST".equalsIgnoreCase(request.getMethod()) && path.startsWith(PUBLIC_ORDERS_PREFIX)) {
+            return false;
+        }
         for (String protectedPath : PROTECTED_PATHS) {
             if (protectedPath.equals(path)) {
                 return false;
@@ -53,9 +61,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String key = clientIp(request) + "|" + request.getRequestURI();
+        String path = request.getRequestURI().replaceAll("/+$", "");
+        String key = clientIp(request) + "|" + path;
 
-        if (rateLimiter.isLimited(key, maxPerMinute)) {
+        boolean publicOrders = path.startsWith(PUBLIC_ORDERS_PREFIX);
+        int limit = publicOrders ? publicOrdersMaxPerMinute : maxPerMinute;
+
+        if (rateLimiter.isLimited(key, limit)) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json");
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());

@@ -14,7 +14,7 @@ import java.util.Map;
 @Service
 public class WhatsAppNotificationService {
 
-    @Value("${whatsapp.enabled:true}")
+    @Value("${whatsapp.enabled:false}")
     private boolean enabled;
 
     @Value("${whatsapp.provider:meta}")
@@ -66,17 +66,31 @@ public class WhatsAppNotificationService {
         log.info("Enviando notificación WhatsApp a +{}: [{}]", cleanPhone, message);
 
         try {
-            if ("meta".equalsIgnoreCase(provider) && !phoneNumberId.isBlank() && !accessToken.isBlank()) {
-                return sendMetaCloudApi(cleanPhone, message);
-            } else if ("webhook".equalsIgnoreCase(provider) && !apiUrl.isBlank()) {
-                return sendWebhook(cleanPhone, message, order);
-            } else {
-                log.info("📢 [WhatsApp SERVIDOR SENT] Mensaje procesado exitosamente para +{}: \"{}\"", cleanPhone, message);
-                return true;
+            boolean sent = sendOnce(cleanPhone, message, order);
+            if (!sent) {
+                log.warn("Primer envío de WhatsApp falló para pedido {}, reintentando en 1.5s...", order.getOrderNumber());
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                sent = sendOnce(cleanPhone, message, order);
             }
+            return sent;
         } catch (Exception e) {
             log.error("Error al enviar notificación de WhatsApp al teléfono +{}: {}", cleanPhone, e.getMessage(), e);
             return false;
+        }
+    }
+
+    private boolean sendOnce(String cleanPhone, String message, Order order) {
+        if ("meta".equalsIgnoreCase(provider) && !phoneNumberId.isBlank() && !accessToken.isBlank()) {
+            return sendMetaCloudApi(cleanPhone, message);
+        } else if ("webhook".equalsIgnoreCase(provider) && !apiUrl.isBlank()) {
+            return sendWebhook(cleanPhone, message, order);
+        } else {
+            log.info("📢 [WhatsApp SERVIDOR SENT] Mensaje procesado exitosamente para +{}: \"{}\"", cleanPhone, message);
+            return true;
         }
     }
 

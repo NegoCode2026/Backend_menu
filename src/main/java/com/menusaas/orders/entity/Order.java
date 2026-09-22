@@ -46,6 +46,17 @@ public class Order {
     @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_type", nullable = false, length = 20)
+    @Builder.Default
+    private OrderType orderType = OrderType.DINE_IN;
+
+    @Column(name = "ready_at")
+    private Instant readyAt;
+
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
@@ -64,5 +75,14 @@ public class Order {
     public void addItem(OrderItem item) {
         items.add(item);
         item.setOrder(this);
+    }
+
+    public void applyStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+        if (newStatus == OrderStatus.READY) {
+            this.readyAt = this.readyAt != null ? this.readyAt : Instant.now();
+        } else if (newStatus == OrderStatus.DELIVERED) {
+            this.deliveredAt = this.deliveredAt != null ? this.deliveredAt : Instant.now();
+        }
     }
 }
