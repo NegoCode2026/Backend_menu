@@ -76,6 +76,7 @@ public class OrderService {
                 .customerName(request.customerName().trim())
                 .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
                 .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
+                .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
                 .notes(request.notes() != null ? request.notes().trim() : null)
                 .orderType(request.orderType() != null ? request.orderType() : OrderType.DINE_IN)
                 .status(OrderStatus.PENDING)
@@ -107,6 +108,7 @@ public class OrderService {
                 .customerName(request.customerName().trim())
                 .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
                 .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
+                .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
                 .notes(request.notes() != null ? request.notes().trim() : null)
                 .orderType(request.orderType() != null ? request.orderType() : OrderType.DINE_IN)
                 .status(OrderStatus.PENDING)
@@ -139,6 +141,9 @@ public class OrderService {
         }
         if (request.tableNumber() != null) {
             order.setTableNumber(request.tableNumber().trim());
+        }
+        if (request.deliveryAddress() != null) {
+            order.setDeliveryAddress(request.deliveryAddress().trim());
         }
         if (request.notes() != null) {
             order.setNotes(request.notes().trim());

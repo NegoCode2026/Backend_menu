@@ -16,8 +16,11 @@ public record CreateOrderRequest(
         @Size(max = 30, message = "El teléfono no puede superar 30 caracteres")
         String customerPhone,
 
-        @Size(max = 30, message = "El número de mesa o dirección no puede superar 30 caracteres")
+        @Size(max = 30, message = "El número de mesa no puede superar 30 caracteres")
         String tableNumber,
+
+        @Size(max = 255, message = "La dirección del domicilio no puede superar 255 caracteres")
+        String deliveryAddress,
 
         String notes,
 

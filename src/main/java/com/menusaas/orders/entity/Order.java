@@ -38,6 +38,9 @@ public class Order {
     @Column(name = "table_number", length = 30)
     private String tableNumber;
 
+    @Column(name = "delivery_address", length = 255)
+    private String deliveryAddress;
+
     @Column(columnDefinition = "text")
     private String notes;
 

@@ -43,6 +43,7 @@ class OrdersIT extends BaseIntegrationTest {
                 "customerName", "Cliente Demo",
                 "customerPhone", "3001234567",
                 "tableNumber", "Mesa 4",
+                "deliveryAddress", "Av. Siempre Viva 742",
                 "notes", "Sin cebolla",
                 "items", List.of(
                         Map.of("productId", 1, "quantity", 2, "notes", "Salsa extra"),
@@ -54,6 +55,7 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(data.get("orderNumber").asText()).startsWith("FRIT-");
         assertThat(data.get("status").asText()).isEqualTo("PENDING");
         assertThat(data.get("orderType").asText()).isEqualTo("DINE_IN");
+        assertThat(data.get("deliveryAddress").asText()).isEqualTo("Av. Siempre Viva 742");
         assertThat(data.get("totalAmount").asDouble()).isEqualTo(62000.0);
         assertThat(data.get("items")).hasSize(2);
         assertThat(data.get("items").get(0).get("productName").asText()).isEqualTo("Hamburguesa Especial");
@@ -244,6 +246,7 @@ class OrdersIT extends BaseIntegrationTest {
                         "customerName", "Cliente Telefónico",
                         "customerPhone", "3155558877",
                         "tableNumber", "Domicilio",
+                        "deliveryAddress", "Calle 93 # 14-20, Zona Gourmet, Bogotá",
                         "orderType", "DELIVERY",
                         "items", List.of(Map.of("productId", productId, "quantity", 2))
                 ), owner), JsonNode.class);
@@ -252,19 +255,22 @@ class OrdersIT extends BaseIntegrationTest {
         long orderId = data.get("id").asLong();
         assertThat(data.get("orderNumber").asText()).startsWith("ADMI-");
         assertThat(data.get("orderType").asText()).isEqualTo("DELIVERY");
+        assertThat(data.get("deliveryAddress").asText()).isEqualTo("Calle 93 # 14-20, Zona Gourmet, Bogotá");
         assertThat(data.get("totalAmount").asDouble()).isEqualTo(20000.0);
         assertThat(data.get("timeline")).hasSize(1);
 
-        // Edición: cambia datos e ítems recalculando el total
+        // Edición: cambia datos (incluida la dirección) e ítems recalculando el total
         ResponseEntity<JsonNode> edited = rest.exchange("/api/orders/" + orderId, HttpMethod.PATCH,
                 TestHttp.body(objectMapper, Map.of(
                         "customerName", "Cliente Editado",
                         "tableNumber", "Mesa 9",
+                        "deliveryAddress", "Cra 7 # 71-52, Chapinero",
                         "items", List.of(Map.of("productId", productId, "quantity", 3))
                 ), owner), JsonNode.class);
         assertThat(edited.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(edited.getBody().get("data").get("customerName").asText()).isEqualTo("Cliente Editado");
         assertThat(edited.getBody().get("data").get("tableNumber").asText()).isEqualTo("Mesa 9");
+        assertThat(edited.getBody().get("data").get("deliveryAddress").asText()).isEqualTo("Cra 7 # 71-52, Chapinero");
         assertThat(edited.getBody().get("data").get("totalAmount").asDouble()).isEqualTo(30000.0);
         assertThat(edited.getBody().get("data").get("items")).hasSize(1);
 
