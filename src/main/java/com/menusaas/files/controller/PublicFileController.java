@@ -1,6 +1,6 @@
 package com.menusaas.files.controller;
 
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.files.service.FileStorageService;
 import com.menusaas.shared.api.BadRequestException;
 import io.swagger.v3.oas.annotations.Operation;

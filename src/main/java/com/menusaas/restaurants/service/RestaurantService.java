@@ -1,6 +1,6 @@
 package com.menusaas.restaurants.service;
 
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.restaurants.dto.RestaurantRequest;
 import com.menusaas.restaurants.dto.RestaurantResponse;
 import com.menusaas.restaurants.entity.Restaurant;
@@ -64,6 +64,33 @@ public class RestaurantService {
         Restaurant restaurant = findByIdOrThrow(id);
         restaurant.setActive(false);
         restaurantRepository.save(restaurant);
+    }
+
+    // ------------------------------------------------------------------
+    // Consultas explícitas por tenant (sin SecurityUtils).
+    // Puerta de acceso para orders/publicmenu: evita que otros módulos
+    // toquen RestaurantRepository directamente.
+    // ------------------------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public Restaurant findActiveBySlugOrThrow(String slug) {
+        String normalized = slug == null ? "" : slug.trim().toLowerCase();
+        return restaurantRepository.findBySlug(normalized)
+                .filter(Restaurant::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Menú no encontrado"));
+    }
+
+    @Transactional
+    public Restaurant findActiveBySlugForUpdateOrThrow(String slug) {
+        String normalized = slug == null ? "" : slug.trim().toLowerCase();
+        return restaurantRepository.findBySlugForUpdate(normalized)
+                .filter(Restaurant::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("El menú digital no existe o no está disponible"));
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<Restaurant> findAllActiveOrderedByName() {
+        return restaurantRepository.findAllByActiveTrueOrderByNameAsc();
     }
 
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {

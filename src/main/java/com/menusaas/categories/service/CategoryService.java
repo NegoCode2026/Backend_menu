@@ -4,7 +4,7 @@ import com.menusaas.categories.dto.CategoryRequest;
 import com.menusaas.categories.dto.CategoryResponse;
 import com.menusaas.categories.entity.Category;
 import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.products.repository.ProductRepository;
+import com.menusaas.products.service.ProductService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
-    private final ProductRepository productRepository;
+    private final ProductService productService;
 
     @Transactional(readOnly = true)
     public Page<CategoryResponse> listMine(Pageable pageable) {
@@ -65,8 +65,20 @@ public class CategoryService {
     @Transactional
     public void deleteMine(Long id) {
         Category category = findScoped(id);
-        productRepository.deleteByCategoryIdAndRestaurantId(category.getId(), category.getRestaurantId());
+        productService.deleteByCategoryAndRestaurant(category.getId(), category.getRestaurantId());
         categoryRepository.delete(category);
+    }
+
+    // ------------------------------------------------------------------
+    // Consultas explícitas por tenant (sin SecurityUtils) para publicmenu.
+    // ------------------------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public java.util.List<Category> findActiveByRestaurantId(Long restaurantId) {
+        return categoryRepository.findAllByRestaurantIdOrderByPositionAsc(restaurantId)
+                .stream()
+                .filter(Category::isActive)
+                .toList();
     }
 
     private Category findScoped(Long id) {

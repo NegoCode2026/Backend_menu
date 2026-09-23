@@ -1,14 +1,13 @@
-package com.menusaas.menus.service;
+package com.menusaas.publicmenu.service;
 
 import com.menusaas.categories.entity.Category;
-import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.files.security.SignedUrlService;
-import com.menusaas.menus.dto.PublicMenuResponse;
+import com.menusaas.categories.service.CategoryService;
+import com.menusaas.shared.security.SignedUrlService;
+import com.menusaas.publicmenu.dto.PublicMenuResponse;
 import com.menusaas.products.entity.Product;
-import com.menusaas.products.repository.ProductRepository;
+import com.menusaas.products.service.ProductService;
 import com.menusaas.restaurants.entity.Restaurant;
-import com.menusaas.restaurants.repository.RestaurantRepository;
-import com.menusaas.shared.api.ResourceNotFoundException;
+import com.menusaas.restaurants.service.RestaurantService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,31 +17,29 @@ import java.util.List;
 /**
  * Menú público: sin autenticación, identificado por slug.
  * Las imágenes se sirven con URLs firmadas con expiración.
+ *
+ * No toca repositorios ajenos: resuelve todo vía servicios de dominio
+ * (RestaurantService, CategoryService, ProductService).
  */
 @Service
 @RequiredArgsConstructor
 public class PublicMenuService {
 
-    private final RestaurantRepository restaurantRepository;
-    private final CategoryRepository categoryRepository;
-    private final ProductRepository productRepository;
+    private final RestaurantService restaurantService;
+    private final CategoryService categoryService;
+    private final ProductService productService;
     private final SignedUrlService signedUrlService;
 
     @Transactional(readOnly = true)
     public PublicMenuResponse getBySlug(String slug) {
-        Restaurant restaurant = restaurantRepository.findBySlug(slug)
-                .filter(Restaurant::isActive)
-                .orElseThrow(() -> new ResourceNotFoundException("Menú no encontrado"));
+        Restaurant restaurant = restaurantService.findActiveBySlugOrThrow(slug);
 
-        List<Category> categories = categoryRepository.findAllByRestaurantIdOrderByPositionAsc(restaurant.getId())
-                .stream()
-                .filter(Category::isActive)
-                .toList();
+        List<Category> categories = categoryService.findActiveByRestaurantId(restaurant.getId());
 
         List<PublicMenuResponse.CategoryInfo> categoryInfos = categories.stream()
                 .map(category -> {
-                    List<PublicMenuResponse.ProductInfo> products = productRepository
-                            .findByCategoryScoped(category.getId(), restaurant.getId(), true)
+                    List<PublicMenuResponse.ProductInfo> products = productService
+                            .findAvailableByCategory(category.getId(), restaurant.getId())
                             .stream()
                             .map(this::toProductInfo)
                             .toList();

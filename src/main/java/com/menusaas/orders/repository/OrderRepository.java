@@ -17,6 +17,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByIdAndRestaurantId(Long id, Long restaurantId);
 
+    java.util.List<Order> findByRestaurantIdAndStatusAndCreatedAtBetween(
+            Long restaurantId, OrderStatus status,
+            java.time.Instant from, java.time.Instant to);
+
     long countByRestaurantId(Long restaurantId);
 
     @Query("SELECT COUNT(o) FROM Order o WHERE o.restaurantId = :restaurantId")

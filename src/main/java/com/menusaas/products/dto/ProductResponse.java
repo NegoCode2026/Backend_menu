@@ -13,6 +13,11 @@ public record ProductResponse(
         String imageUrl,
         boolean available,
         int position,
+        BigDecimal costPrice,
+        int stockQuantity,
+        int lowStockThreshold,
+        boolean trackStock,
+        boolean lowStock,
         Instant createdAt,
         Instant updatedAt
 ) {

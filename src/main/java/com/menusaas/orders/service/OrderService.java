@@ -6,9 +6,10 @@ import com.menusaas.orders.entity.OrderItem;
 import com.menusaas.orders.entity.OrderStatus;
 import com.menusaas.orders.repository.OrderRepository;
 import com.menusaas.products.entity.Product;
-import com.menusaas.products.repository.ProductRepository;
+import com.menusaas.products.service.ProductService;
+import com.menusaas.realtime.OrderEventPublisher;
 import com.menusaas.restaurants.entity.Restaurant;
-import com.menusaas.restaurants.repository.RestaurantRepository;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
@@ -26,17 +27,17 @@ import java.util.List;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final RestaurantRepository restaurantRepository;
-    private final ProductRepository productRepository;
+    private final RestaurantService restaurantService;
+    private final ProductService productService;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final OrderEventPublisher orderEvents;
 
     @Transactional
     public OrderResponse createPublicOrder(String slug, CreateOrderRequest request) {
         // Lock pesimista en la fila del restaurante: dos pedidos concurrentes del
         // mismo tenant se serializan aquí, evitando que count+1 genere duplicados.
-        Restaurant restaurant = restaurantRepository.findBySlugForUpdate(slug.trim().toLowerCase())
-                .filter(Restaurant::isActive)
-                .orElseThrow(() -> new ResourceNotFoundException("El menú digital no existe o no está disponible"));
+        // Se resuelve vía RestaurantService para no tocar su repositorio directamente.
+        Restaurant restaurant = restaurantService.findActiveBySlugForUpdateOrThrow(slug);
 
         if (!restaurant.isOpen()) {
             throw new BadRequestException("El restaurante está cerrado en este momento y no puede recibir pedidos. Inténtalo más tarde.");
@@ -57,11 +58,20 @@ public class OrderService {
         BigDecimal total = BigDecimal.ZERO;
 
         for (OrderItemRequest itemReq : request.items()) {
-            Product product = productRepository.findByIdAndRestaurantId(itemReq.productId(), restaurantId)
-                    .orElseThrow(() -> new BadRequestException("Producto no disponible en el menú: ID " + itemReq.productId()));
-
+            final Product product;
+            try {
+                product = productService.getByIdAndRestaurantIdOrThrow(itemReq.productId(), restaurantId);
+            } catch (ResourceNotFoundException e) {
+                // Contrato público: producto ajeno/inexistente es 400, no 404
+                // (el pedido aún no existe; es error del payload).
+                throw new BadRequestException("Producto no disponible en el menú: ID " + itemReq.productId());
+            }
             if (!product.isAvailable()) {
                 throw new BadRequestException("El producto '" + product.getName() + "' no se encuentra disponible actualmente");
+            }
+            // Defensa extra: el producto debe pertenecer al tenant del pedido.
+            if (!restaurantId.equals(product.getRestaurantId())) {
+                throw new BadRequestException("Producto no disponible en el menú: ID " + itemReq.productId());
             }
 
             BigDecimal unitPrice = product.getPrice();
@@ -72,6 +82,8 @@ public class OrderService {
                     .productId(product.getId())
                     .productName(product.getName())
                     .unitPrice(unitPrice)
+                    .unitCost(product.getCostPrice() != null
+                            ? product.getCostPrice() : java.math.BigDecimal.ZERO)
                     .quantity(itemReq.quantity())
                     .subtotal(subtotal)
                     .notes(itemReq.notes() != null ? itemReq.notes().trim() : null)
@@ -88,10 +100,23 @@ public class OrderService {
         order.setOrderNumber(String.format("%s-%04d", prefix, count + 1));
 
         Order saved = orderRepository.save(order);
+
+        // Descuento de inventario con el orderId ya generado (misma
+        // transacción: si no hay stock, todo hace rollback). Serializado
+        // por el lock pesimista del restaurante.
+        for (OrderItem savedItem : saved.getItems()) {
+            if (savedItem.getProductId() != null) {
+                productService.deductStock(
+                        savedItem.getProductId(), restaurantId, savedItem.getQuantity(), saved.getId());
+            }
+        }
+
         log.info("Nuevo pedido recibido: num={}, restaurante={}, cliente={}, total={}",
                 saved.getOrderNumber(), restaurant.getSlug(), saved.getCustomerName(), saved.getTotalAmount());
 
-        return OrderResponse.from(saved);
+        OrderResponse response = OrderResponse.from(saved);
+        orderEvents.orderCreated(response);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -129,6 +154,21 @@ public class OrderService {
         Order updated = orderRepository.save(order);
         log.info("Estado de pedido actualizado: id={}, num={}, nuevoEstado={}", updated.getId(), updated.getOrderNumber(), newStatus);
 
+        // Al cancelar se devuelve el stock descontado al crear el pedido.
+        if (newStatus == OrderStatus.CANCELLED) {
+            for (OrderItem item : updated.getItems()) {
+                if (item.getProductId() != null) {
+                    try {
+                        productService.restoreStock(
+                                item.getProductId(), restaurantId, item.getQuantity(), updated.getId());
+                    } catch (Exception e) {
+                        log.error("No se pudo devolver stock del pedido id={} producto={}: {}",
+                                updated.getId(), item.getProductId(), e.getMessage());
+                    }
+                }
+            }
+        }
+
         if (newStatus == OrderStatus.DELIVERED) {
             try {
                 whatsAppNotificationService.sendOrderReadyNotification(updated);
@@ -137,7 +177,9 @@ public class OrderService {
             }
         }
 
-        return OrderResponse.from(updated);
+        OrderResponse response = OrderResponse.from(updated);
+        orderEvents.statusChanged(response);
+        return response;
     }
 
     @Transactional

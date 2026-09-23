@@ -24,7 +24,7 @@ public record AppProperties(
         if (apiBaseUrl == null) apiBaseUrl = "http://localhost:8080";
         if (uploadDir == null) uploadDir = "./uploads";
         if (cors == null) cors = new Cors(new ArrayList<>());
-        if (security == null) security = new Security(false, 3600, 24);
+        if (security == null) security = new Security(false, 3600, 24, "Strict");
         if (payments == null) payments = new Payments(null, null, null, null);
     }
 
@@ -52,12 +52,28 @@ public record AppProperties(
     /**
      * cookiesSecure: cookies HttpOnly/SameSite con flag Secure (obligatorio en HTTPS).
      * signedUrlTtlSeconds: tiempo de vida de las URLs firmadas de imágenes.
+     * cookieSameSite: Strict (mismo-origen) | Lax | None (cross-site Vercel->túnel).
+     *   None exige Secure=true (los navegadores rechazan None sin Secure).
      */
     public record Security(boolean cookiesSecure, long signedUrlTtlSeconds,
-                           int sessionAbsoluteTtlHours) {
+                           int sessionAbsoluteTtlHours, String cookieSameSite) {
         public Security {
             if (signedUrlTtlSeconds <= 0) signedUrlTtlSeconds = 3600;
             if (sessionAbsoluteTtlHours <= 0) sessionAbsoluteTtlHours = 24;
+            if (cookieSameSite == null || cookieSameSite.isBlank()) cookieSameSite = "Strict";
+            String normalized = cookieSameSite.trim();
+            if (!List.of("Strict", "Lax", "None").contains(normalized)) {
+                throw new IllegalArgumentException("app.security.cookie-same-site debe ser Strict|Lax|None");
+            }
+            cookieSameSite = normalized;
+            if ("None".equals(cookieSameSite) && !cookiesSecure) {
+                throw new IllegalArgumentException("SameSite=None exige COOKIES_SECURE=true");
+            }
+        }
+
+        /** Compat con callers que construían Security(a, b, c). */
+        public Security(boolean cookiesSecure, long signedUrlTtlSeconds, int sessionAbsoluteTtlHours) {
+            this(cookiesSecure, signedUrlTtlSeconds, sessionAbsoluteTtlHours, "Strict");
         }
     }
 

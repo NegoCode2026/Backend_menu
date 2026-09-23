@@ -1,4 +1,4 @@
-package com.menusaas.menus.dto;
+package com.menusaas.publicmenu.dto;
 
 import java.math.BigDecimal;
 

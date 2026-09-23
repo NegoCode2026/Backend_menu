@@ -1,7 +1,7 @@
 package com.menusaas.products;
 
 import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.products.dto.ProductRequest;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.repository.ProductRepository;
@@ -35,11 +35,14 @@ class ProductServiceTest {
     @Mock
     private SignedUrlService signedUrlService;
 
+    @Mock
+    private com.menusaas.inventory.service.InventoryService inventoryService;
+
     private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryRepository, signedUrlService);
+        productService = new ProductService(productRepository, categoryRepository, signedUrlService, inventoryService);
     }
 
     @Test
@@ -50,7 +53,8 @@ class ProductServiceTest {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(2L);
             when(categoryRepository.existsByIdAndRestaurantId(999L, 2L)).thenReturn(false);
 
-            ProductRequest request = new ProductRequest(999L, "X", null, new BigDecimal("100"), null, true, 0);
+            ProductRequest request = new ProductRequest(999L, "X", null, new BigDecimal("100"), null, true, 0,
+                    null, null, null, null);
 
             assertThatThrownBy(() -> productService.createMine(request))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -70,7 +74,7 @@ class ProductServiceTest {
             });
 
             ProductRequest request = new ProductRequest(7L, "Hamburguesa", "Deliciosa",
-                    new BigDecimal("18000.00"), null, true, 1);
+                    new BigDecimal("18000.00"), null, true, 1, null, null, null, null);
 
             var response = productService.createMine(request);
 
@@ -88,7 +92,8 @@ class ProductServiceTest {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(productRepository.findByIdAndRestaurantId(5L, 1L)).thenReturn(Optional.empty());
 
-            ProductRequest request = new ProductRequest(1L, "Y", null, new BigDecimal("1"), null, true, 0);
+            ProductRequest request = new ProductRequest(1L, "Y", null, new BigDecimal("1"), null, true, 0,
+                    null, null, null, null);
 
             assertThatThrownBy(() -> productService.updateMine(5L, request))
                     .isInstanceOf(ResourceNotFoundException.class);
