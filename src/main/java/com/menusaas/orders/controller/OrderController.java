@@ -4,6 +4,7 @@ import com.menusaas.orders.dto.CreateOrderRequest;
 import com.menusaas.orders.dto.OrderResponse;
 import com.menusaas.orders.dto.OrderStatsResponse;
 import com.menusaas.orders.dto.OrderStatusRequest;
+import com.menusaas.orders.dto.PayOrderRequest;
 import com.menusaas.orders.dto.UpdateOrderRequest;
 import com.menusaas.orders.entity.OrderStatus;
 import com.menusaas.orders.service.OrderService;
@@ -64,6 +65,12 @@ public class OrderController {
     @PatchMapping("/{id}/status")
     public ApiResponse<OrderResponse> updateStatus(@PathVariable Long id, @Valid @RequestBody OrderStatusRequest request) {
         return ApiResponse.ok("Estado de pedido actualizado", orderService.updateStatusMine(id, request.status()));
+    }
+
+    @Operation(summary = "Cobrar un pedido entregado (método de pago)")
+    @PostMapping("/{id}/pay")
+    public ApiResponse<OrderResponse> pay(@PathVariable Long id, @Valid @RequestBody PayOrderRequest request) {
+        return ApiResponse.ok("Pedido cobrado", orderService.payMine(id, request.paymentMethod()));
     }
 
     @Operation(summary = "Enviar notificación de WhatsApp de 'Pedido listo' al cliente")

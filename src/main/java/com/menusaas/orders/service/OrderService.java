@@ -297,6 +297,23 @@ public class OrderService {
         return whatsAppNotificationService.sendOrderReadyNotification(order);
     }
 
+    /**
+     * Cobra un pedido ENTREGADO: fija método de pago y momento del cobro.
+     * Solo entregados se pueden cobrar; recobrar cambia el método.
+     */
+    @Transactional
+    public OrderResponse payMine(Long id, com.menusaas.orders.entity.PaymentMethod paymentMethod) {
+        Order order = getMineOrder(id);
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new BadRequestException("Solo se puede cobrar un pedido entregado");
+        }
+        order.setPaymentMethod(paymentMethod);
+        order.setPaidAt(java.time.Instant.now());
+        Order updated = orderRepository.save(order);
+        log.info("Pedido cobrado: id={}, num={}, método={}", updated.getId(), updated.getOrderNumber(), paymentMethod);
+        return withHistory(updated);
+    }
+
     private Order getMineOrder(Long id) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         return orderRepository.findByIdAndRestaurantId(id, restaurantId)
