@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 public record ProductRequest(
-        @NotNull(message = "La categoría es obligatoria")
+        /** Categoría opcional: null = sin categoría. */
         Long categoryId,
 
         @NotBlank(message = "El nombre es obligatorio")

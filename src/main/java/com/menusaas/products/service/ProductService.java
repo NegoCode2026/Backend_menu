@@ -105,6 +105,11 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
+    public java.util.List<Product> findUncategorized(Long restaurantId) {
+        return productRepository.findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(restaurantId);
+    }
+
+    @Transactional(readOnly = true)
     public java.util.Map<Long, Long> countAvailableGroupedByRestaurant() {
         java.util.Map<Long, Long> counts = new java.util.HashMap<>();
         for (Object[] row : productRepository.countAvailableGroupedByRestaurant()) {
@@ -188,10 +193,13 @@ public class ProductService {
     }
 
     /**
-     * La categoría debe pertenecer al mismo tenant, de lo contrario se rechaza
-     * (evita mover productos entre restaurantes mediante categoryId).
+     * Si trae categoría, debe pertenecer al mismo tenant (evita mover
+     * productos entre restaurantes mediante categoryId). Null = sin categoría.
      */
     private void validateCategoryBelongsToTenant(Long categoryId, Long restaurantId) {
+        if (categoryId == null) {
+            return;
+        }
         if (!categoryRepository.existsByIdAndRestaurantId(categoryId, restaurantId)) {
             throw new ResourceNotFoundException("Categoría no encontrada en este restaurante");
         }

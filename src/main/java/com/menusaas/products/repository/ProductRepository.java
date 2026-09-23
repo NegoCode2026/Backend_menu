@@ -22,6 +22,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByIdAndRestaurantId(Long id, Long restaurantId);
 
+    java.util.List<Product> findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(Long restaurantId);
+
     @Modifying
     @Query("delete from Product p where p.categoryId = :categoryId and p.restaurantId = :restaurantId")
     int deleteByCategoryIdAndRestaurantId(@Param("categoryId") Long categoryId, @Param("restaurantId") Long restaurantId);

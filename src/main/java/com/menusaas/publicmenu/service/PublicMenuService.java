@@ -48,7 +48,19 @@ public class PublicMenuService {
                             category.getPosition(), products
                     );
                 })
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+
+        // Productos sin categoría: grupo final "Sin categoría".
+        List<PublicMenuResponse.ProductInfo> loose = productService
+                .findUncategorized(restaurant.getId())
+                .stream()
+                .filter(Product::isAvailable)
+                .map(this::toProductInfo)
                 .toList();
+        if (!loose.isEmpty()) {
+            categoryInfos.add(new PublicMenuResponse.CategoryInfo(
+                    0L, "Sin categoría", null, Integer.MAX_VALUE, loose));
+        }
 
         return new PublicMenuResponse(
                 new PublicMenuResponse.RestaurantInfo(

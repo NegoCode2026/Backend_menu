@@ -28,7 +28,7 @@ public class Product {
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 
-    @Column(name = "category_id", nullable = false)
+    @Column(name = "category_id")
     private Long categoryId;
 
     @Column(nullable = false, length = 160)
