@@ -77,6 +77,7 @@ public class OrderService {
                 .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
                 .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
                 .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
+                .trackingCode(java.util.UUID.randomUUID().toString())
                 .notes(request.notes() != null ? request.notes().trim() : null)
                 .orderType(request.orderType() != null ? request.orderType() : OrderType.DINE_IN)
                 .status(OrderStatus.PENDING)
@@ -195,6 +196,13 @@ public class OrderService {
     @Transactional(readOnly = true)
     public OrderResponse getMine(Long id) {
         Order order = getMineOrder(id);
+        return withHistory(order);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse trackPublicOrder(String trackingCode) {
+        Order order = orderRepository.findByTrackingCode(trackingCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
         return withHistory(order);
     }
 

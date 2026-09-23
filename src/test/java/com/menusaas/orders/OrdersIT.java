@@ -359,6 +359,33 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(last.getStatusCode().value()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
     }
 
+    @Test
+    void publicOrder_trackingCode_returnsStatus() {
+        // Crear pedido público: la respuesta incluye el código de seguimiento
+        ResponseEntity<JsonNode> created = postPublicOrder("fritomix", Map.of(
+                "customerName", "Cliente Seguimiento",
+                "customerPhone", "3123456789",
+                "items", List.of(Map.of("productId", 1, "quantity", 1))
+        ));
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        String trackingCode = created.getBody().get("data").get("trackingCode").asText();
+        assertThat(trackingCode).isNotBlank();
+
+        // Seguimiento sin autenticación con el código → 200 con el mismo pedido
+        ResponseEntity<JsonNode> tracked = rest.getForEntity(
+                "/api/public/orders/track/" + trackingCode, JsonNode.class);
+        assertThat(tracked.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(tracked.getBody().get("data").get("orderNumber").asText())
+                .isEqualTo(created.getBody().get("data").get("orderNumber").asText());
+        assertThat(tracked.getBody().get("data").get("status").asText()).isEqualTo("PENDING");
+        assertThat(tracked.getBody().get("data").get("trackingCode").asText()).isEqualTo(trackingCode);
+
+        // Código desconocido → 404
+        ResponseEntity<JsonNode> unknown = rest.getForEntity(
+                "/api/public/orders/track/no-existe-el-codigo", JsonNode.class);
+        assertThat(unknown.getStatusCode().value()).isEqualTo(404);
+    }
+
     private long createProduct(TestHttp.Session session, String name, int price) throws Exception {
         ResponseEntity<JsonNode> category = rest.exchange("/api/categories", HttpMethod.POST,
                 TestHttp.body(objectMapper, Map.of("name", name + " Cat", "position", 1, "active", true), session),

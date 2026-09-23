@@ -29,6 +29,9 @@ public class Order {
     @Column(name = "order_number", nullable = false, length = 30)
     private String orderNumber;
 
+    @Column(name = "tracking_code", length = 36)
+    private String trackingCode;
+
     @Column(name = "customer_name", nullable = false, length = 120)
     private String customerName;
 
