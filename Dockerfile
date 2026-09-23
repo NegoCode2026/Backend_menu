@@ -15,4 +15,4 @@ COPY --from=build /app/target/*.jar app.jar
 RUN mkdir -p /app/uploads && chown -R app:app /app
 USER app
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

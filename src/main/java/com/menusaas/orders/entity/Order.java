@@ -29,6 +29,9 @@ public class Order {
     @Column(name = "order_number", nullable = false, length = 30)
     private String orderNumber;
 
+    @Column(name = "tracking_code", length = 36)
+    private String trackingCode;
+
     @Column(name = "customer_name", nullable = false, length = 120)
     private String customerName;
 
@@ -38,6 +41,9 @@ public class Order {
     @Column(name = "table_number", length = 30)
     private String tableNumber;
 
+    @Column(name = "delivery_address", length = 255)
+    private String deliveryAddress;
+
     @Column(columnDefinition = "text")
     private String notes;
 
@@ -45,6 +51,17 @@ public class Order {
     @Column(nullable = false, length = 30)
     @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_type", nullable = false, length = 20)
+    @Builder.Default
+    private OrderType orderType = OrderType.DINE_IN;
+
+    @Column(name = "ready_at")
+    private Instant readyAt;
+
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
 
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
@@ -64,5 +81,14 @@ public class Order {
     public void addItem(OrderItem item) {
         items.add(item);
         item.setOrder(this);
+    }
+
+    public void applyStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+        if (newStatus == OrderStatus.READY) {
+            this.readyAt = this.readyAt != null ? this.readyAt : Instant.now();
+        } else if (newStatus == OrderStatus.DELIVERED) {
+            this.deliveredAt = this.deliveredAt != null ? this.deliveredAt : Instant.now();
+        }
     }
 }

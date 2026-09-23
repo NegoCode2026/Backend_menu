@@ -8,7 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -54,7 +54,12 @@ public class LocalFileStorageService implements FileStorageService {
             throw new BadRequestException("Formato no permitido. Use JPG, PNG, WEBP o GIF");
         }
         try {
+            // IMPORTANTE: getBytes() consume el InputStream. Se usan los bytes directamente
+            // para detectar el tipo Y para escribir el archivo (no llamar getInputStream() después).
             byte[] bytes = file.getBytes();
+            if (bytes.length == 0) {
+                throw new BadRequestException("El archivo recibido está vacío");
+            }
             String detectedType = detectContentType(bytes);
             if (!ALLOWED_TYPES.contains(detectedType)) {
                 throw new BadRequestException("El contenido del archivo no es una imagen permitida");
@@ -66,14 +71,27 @@ public class LocalFileStorageService implements FileStorageService {
             if (!target.startsWith(uploadRoot)) {
                 throw new BadRequestException("Nombre de archivo inválido");
             }
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            // Escribir con los bytes ya leídos (el InputStream ya fue consumido por getBytes())
+            Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             return filename;
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo guardar el archivo", ex);
         }
     }
 
+    public void storeDirect(String fileId, byte[] bytes) {
+        if (fileId == null || !fileId.matches("[A-Za-z0-9._-]+")) return;
+        try {
+            Path target = uploadRoot.resolve(fileId).normalize();
+            if (target.startsWith(uploadRoot)) {
+                Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     @Override
+    @Deprecated
     public StoredFile load(String fileId) {
         if (fileId == null || !fileId.matches("[A-Za-z0-9._-]+")) {
             throw new BadRequestException("Identificador de archivo inválido");
@@ -90,6 +108,26 @@ public class LocalFileStorageService implements FileStorageService {
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo leer el archivo", ex);
         }
+    }
+
+    @Override
+    public Path resolvePath(String fileId) {
+        if (fileId == null || !fileId.matches("[A-Za-z0-9._-]+")) {
+            throw new BadRequestException("Identificador de archivo inválido");
+        }
+        Path target = uploadRoot.resolve(fileId).normalize();
+        if (!target.startsWith(uploadRoot)) {
+            throw new BadRequestException("Identificador de archivo inválido");
+        }
+        if (!Files.isRegularFile(target)) {
+            throw new BadRequestException("El archivo no existe");
+        }
+        return target;
+    }
+
+    @Override
+    public String contentTypeForId(String fileId) {
+        return contentTypeFor(fileId);
     }
 
     @Override

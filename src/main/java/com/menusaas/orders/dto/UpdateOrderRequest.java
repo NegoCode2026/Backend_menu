@@ -2,14 +2,11 @@ package com.menusaas.orders.dto;
 
 import com.menusaas.orders.entity.OrderType;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-public record CreateOrderRequest(
-        @NotBlank(message = "El nombre del cliente es obligatorio")
+public record UpdateOrderRequest(
         @Size(max = 120, message = "El nombre del cliente no puede superar 120 caracteres")
         String customerName,
 
@@ -26,7 +23,6 @@ public record CreateOrderRequest(
 
         OrderType orderType,
 
-        @NotEmpty(message = "El pedido debe contener al menos un producto")
         @Valid
         List<OrderItemRequest> items
 ) {

@@ -1,4 +1,8 @@
 spring:
+  data:
+    web:
+      pageable:
+        serialization-mode: VIA_DTO
   application:
     name: menu-saas-backend
   datasource:
@@ -16,8 +20,7 @@ spring:
   flyway:
     enabled: true
     # Perfil de desarrollo: además de db/migration incluye db/dev (seed demo).
-    # En producción (application-prod.yml) SOLO se ejecuta db/migration.
-    locations: classpath:db/migration,classpath:db/dev
+    locations: "classpath:db/migration,classpath:db/dev"
     baseline-on-migrate: true
   servlet:
     multipart:
@@ -54,6 +57,11 @@ app:
     epayco-private-key: ${EPAYCO_PRIVATE_KEY:}
     epayco-customer-id: ${EPAYCO_CUSTOMER_ID:}
     epayco-p-key: ${EPAYCO_P_KEY:}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    url: ${CLOUDINARY_URL:}
 
 springdoc:
   swagger-ui:

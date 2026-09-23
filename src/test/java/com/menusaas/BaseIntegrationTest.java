@@ -32,6 +32,7 @@ public abstract class BaseIntegrationTest {
         registry.add("app.app-base-url", () -> "http://localhost:4200");
         registry.add("app.api-base-url", () -> "http://localhost:8080");
         registry.add("app.upload-dir", () -> "target/test-uploads");
-        registry.add("app.security.cookies-secure", () -> "false");
+        registry.add("spring.security.cookies-secure", () -> "false");
+        registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/dev");
     }
 }

@@ -23,6 +23,10 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
     @Query("select r from Restaurant r where r.slug = :slug")
     Optional<Restaurant> findBySlugForUpdate(@Param("slug") String slug);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Restaurant r where r.id = :id")
+    Optional<Restaurant> findByIdForUpdate(@Param("id") Long id);
+
     boolean existsBySlug(String slug);
 
     long countByActive(boolean active);

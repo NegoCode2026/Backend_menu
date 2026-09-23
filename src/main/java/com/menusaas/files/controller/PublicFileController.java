@@ -6,6 +6,8 @@ import com.menusaas.shared.api.BadRequestException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,18 +31,25 @@ public class PublicFileController {
 
     @Operation(summary = "Servir imagen con URL firmada (expiración + HMAC)")
     @GetMapping("/{fileId}")
-    public ResponseEntity<byte[]> serve(@PathVariable String fileId,
-                                        @RequestParam long exp,
-                                        @RequestParam String sig) {
+    public ResponseEntity<Resource> serve(@PathVariable String fileId,
+                                          @RequestParam long exp,
+                                          @RequestParam String sig) {
         if (!signedUrlService.isValid(fileId, exp, sig)) {
             throw new BadRequestException("Enlace de imagen inválido o expirado");
         }
-        FileStorageService.StoredFile stored = fileStorageService.load(fileId);
+
+        FileStorageService.StoredFile storedFile = fileStorageService.load(fileId);
+        Resource resource = new ByteArrayResource(storedFile.content()) {
+            @Override
+            public String getFilename() {
+                return fileId;
+            }
+        };
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(stored.contentType()))
+                .contentType(MediaType.parseMediaType(storedFile.contentType()))
                 .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + stored.fileId() + "\"")
-                .body(stored.content());
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileId + "\"")
+                .body(resource);
     }
 }

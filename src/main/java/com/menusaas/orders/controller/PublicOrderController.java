@@ -26,4 +26,10 @@ public class PublicOrderController {
                                                   @Valid @RequestBody CreateOrderRequest request) {
         return ApiResponse.ok("Pedido recibido exitosamente", orderService.createPublicOrder(slug, request));
     }
+
+    @Operation(summary = "Consultar el estado de un pedido por su código de seguimiento (sin autenticación)")
+    @GetMapping("/track/{trackingCode}")
+    public ApiResponse<OrderResponse> track(@PathVariable String trackingCode) {
+        return ApiResponse.ok(orderService.trackPublicOrder(trackingCode));
+    }
 }
