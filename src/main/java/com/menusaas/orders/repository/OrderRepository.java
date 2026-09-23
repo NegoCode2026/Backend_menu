@@ -20,6 +20,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     Optional<Order> findByIdAndRestaurantId(Long id, Long restaurantId);
 
+    Optional<Order> findByTrackingCode(String trackingCode);
+
     java.util.List<Order> findByRestaurantIdAndStatusAndCreatedAtBetween(
             Long restaurantId, OrderStatus status,
             java.time.Instant from, java.time.Instant to);

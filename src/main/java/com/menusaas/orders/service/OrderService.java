@@ -1,6 +1,10 @@
 package com.menusaas.orders.service;
 
-import com.menusaas.orders.dto.*;
+import com.menusaas.orders.dto.CreateOrderRequest;
+import com.menusaas.orders.dto.OrderItemRequest;
+import com.menusaas.orders.dto.OrderResponse;
+import com.menusaas.orders.dto.OrderStatsResponse;
+import com.menusaas.orders.dto.UpdateOrderRequest;
 import com.menusaas.orders.entity.Order;
 import com.menusaas.orders.entity.OrderItem;
 import com.menusaas.orders.entity.OrderStatus;
@@ -35,13 +39,24 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
+/**
+ * Pedidos: creación pública (clientes) y manual (staff), edición,
+ * máquina de estados con historial, tracking público y estadísticas.
+ *
+ * No toca repositorios ajenos: catálogo vía ProductService/RestaurantService.
+ * El inventario se descuenta tras guardar (misma transacción, serializada
+ * por el lock pesimista del restaurante) y se devuelve al cancelar.
+ * Los eventos al staff se publican para envío WebSocket AFTER_COMMIT.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final OrderStatusHistoryRepository historyRepository;
     private final RestaurantService restaurantService;
     private final ProductService productService;
     private final WhatsAppNotificationService whatsAppNotificationService;
@@ -71,38 +86,7 @@ public class OrderService {
             throw new BadRequestException("El restaurante está cerrado en este momento y no puede recibir pedidos. Inténtalo más tarde.");
         }
 
-        Order order = Order.builder()
-                .restaurantId(restaurant.getId())
-                .customerName(request.customerName().trim())
-                .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
-                .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
-                .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
-                .trackingCode(java.util.UUID.randomUUID().toString())
-                .notes(request.notes() != null ? request.notes().trim() : null)
-                .orderType(request.orderType() != null ? request.orderType() : OrderType.DINE_IN)
-                .status(OrderStatus.PENDING)
-                .totalAmount(BigDecimal.ZERO)
-                .build();
-
-        applyItems(order, restaurant.getId(), request.items());
-
-        // Generación de consecutivo de pedido (ej. FMIX-0001)
-        long count = orderRepository.countOrdersForRestaurant(restaurant.getId());
-        order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
-
-        Order saved = orderRepository.save(order);
-        recordStatus(saved.getId(), null, OrderStatus.PENDING);
-        log.info("Nuevo pedido recibido: num={}, restaurante={}, cliente={}, total={}",
-                saved.getOrderNumber(), restaurant.getSlug(), saved.getCustomerName(), saved.getTotalAmount());
-
-        return withHistory(saved);
-    }
-
-    @Transactional
-    public OrderResponse createMine(CreateOrderRequest request) {
-        Long restaurantId = SecurityUtils.currentRestaurantId();
-        Restaurant restaurant = restaurantRepository.findByIdForUpdate(restaurantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+        Long restaurantId = restaurant.getId();
 
         Order order = Order.builder()
                 .restaurantId(restaurantId)
@@ -110,6 +94,42 @@ public class OrderService {
                 .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
                 .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
                 .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
+                .trackingCode(UUID.randomUUID().toString())
+                .notes(request.notes() != null ? request.notes().trim() : null)
+                .orderType(request.orderType() != null ? request.orderType() : OrderType.DINE_IN)
+                .status(OrderStatus.PENDING)
+                .totalAmount(BigDecimal.ZERO)
+                .build();
+
+        applyItems(order, restaurantId, request.items());
+
+        // Generación de consecutivo de pedido (ej. FMIX-0001)
+        long count = orderRepository.countOrdersForRestaurant(restaurantId);
+        order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
+
+        Order saved = orderRepository.save(order);
+        deductStock(saved);
+        recordStatus(saved.getId(), null, OrderStatus.PENDING);
+        log.info("Nuevo pedido recibido: num={}, restaurante={}, cliente={}, total={}",
+                saved.getOrderNumber(), restaurant.getSlug(), saved.getCustomerName(), saved.getTotalAmount());
+
+        OrderResponse response = withHistory(saved);
+        orderEvents.orderCreated(response);
+        return response;
+    }
+
+    @Transactional
+    public OrderResponse createMine(CreateOrderRequest request) {
+        Long restaurantId = SecurityUtils.currentRestaurantId();
+        Restaurant restaurant = restaurantService.findByIdForUpdateOrThrow(restaurantId);
+
+        Order order = Order.builder()
+                .restaurantId(restaurantId)
+                .customerName(request.customerName().trim())
+                .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
+                .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
+                .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
+                .trackingCode(UUID.randomUUID().toString())
                 .notes(request.notes() != null ? request.notes().trim() : null)
                 .orderType(request.orderType() != null ? request.orderType() : OrderType.DINE_IN)
                 .status(OrderStatus.PENDING)
@@ -122,11 +142,14 @@ public class OrderService {
         order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
 
         Order saved = orderRepository.save(order);
+        deductStock(saved);
         recordStatus(saved.getId(), null, OrderStatus.PENDING);
         log.info("Pedido creado por el restaurante: num={}, restauranteId={}, cliente={}, total={}",
                 saved.getOrderNumber(), restaurantId, saved.getCustomerName(), saved.getTotalAmount());
 
-        return withHistory(saved);
+        OrderResponse response = withHistory(saved);
+        orderEvents.orderCreated(response);
+        return response;
     }
 
     @Transactional
@@ -156,10 +179,13 @@ public class OrderService {
             if (request.items().isEmpty()) {
                 throw new BadRequestException("El pedido debe contener al menos un producto");
             }
+            // Los ítems cambian: se devuelve el stock anterior y se descuenta el nuevo.
+            restoreStock(order);
             applyItems(order, order.getRestaurantId(), request.items());
         }
 
         Order updated = orderRepository.save(order);
+        deductStock(updated);
         log.info("Pedido editado: id={}, num={}", updated.getId(), updated.getOrderNumber());
         return withHistory(updated);
     }
@@ -191,6 +217,12 @@ public class OrderService {
         }
 
         return withHistory(orders);
+    }
+
+    /** Compat: listado simple sin paginación. */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> listMine(OrderStatus status) {
+        return listMine(status, null, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -241,6 +273,11 @@ public class OrderService {
         recordStatus(updated.getId(), current, newStatus);
         log.info("Estado de pedido actualizado: id={}, num={}, nuevoEstado={}", updated.getId(), updated.getOrderNumber(), newStatus);
 
+        // Al cancelar se devuelve el stock descontado al crear el pedido.
+        if (newStatus == OrderStatus.CANCELLED) {
+            restoreStock(updated);
+        }
+
         if (newStatus == OrderStatus.READY) {
             try {
                 whatsAppNotificationService.sendOrderReadyNotification(updated);
@@ -249,7 +286,9 @@ public class OrderService {
             }
         }
 
-        return withHistory(updated);
+        OrderResponse response = withHistory(updated);
+        orderEvents.statusChanged(response);
+        return response;
     }
 
     @Transactional
@@ -273,11 +312,15 @@ public class OrderService {
         }
     }
 
+    /**
+     * Valida productos del tenant, calcula totales y congela el costo
+     * unitario (snapshot para utilidades históricas).
+     */
     private void applyItems(Order order, Long restaurantId, List<OrderItemRequest> itemRequests) {
         order.getItems().clear();
         BigDecimal total = BigDecimal.ZERO;
 
-        for (OrderItemRequest itemReq : request.items()) {
+        for (OrderItemRequest itemReq : itemRequests) {
             final Product product;
             try {
                 product = productService.getByIdAndRestaurantIdOrThrow(itemReq.productId(), restaurantId);
@@ -303,7 +346,7 @@ public class OrderService {
                     .productName(product.getName())
                     .unitPrice(unitPrice)
                     .unitCost(product.getCostPrice() != null
-                            ? product.getCostPrice() : java.math.BigDecimal.ZERO)
+                            ? product.getCostPrice() : BigDecimal.ZERO)
                     .quantity(itemReq.quantity())
                     .subtotal(subtotal)
                     .notes(itemReq.notes() != null ? itemReq.notes().trim() : null)
@@ -313,30 +356,31 @@ public class OrderService {
         }
 
         order.setTotalAmount(total);
+    }
 
-        // Generación de consecutivo de pedido (ej. FMIX-0001)
-        long count = orderRepository.countOrdersForRestaurant(restaurantId);
-        String prefix = generatePrefix(restaurant.getSlug());
-        order.setOrderNumber(String.format("%s-%04d", prefix, count + 1));
-
-        Order saved = orderRepository.save(order);
-
-        // Descuento de inventario con el orderId ya generado (misma
-        // transacción: si no hay stock, todo hace rollback). Serializado
-        // por el lock pesimista del restaurante.
-        for (OrderItem savedItem : saved.getItems()) {
-            if (savedItem.getProductId() != null) {
+    /** Descuento de inventario con orderId ya generado (misma transacción). */
+    private void deductStock(Order order) {
+        for (OrderItem item : order.getItems()) {
+            if (item.getProductId() != null) {
                 productService.deductStock(
-                        savedItem.getProductId(), restaurantId, savedItem.getQuantity(), saved.getId());
+                        item.getProductId(), order.getRestaurantId(), item.getQuantity(), order.getId());
             }
         }
+    }
 
-        log.info("Nuevo pedido recibido: num={}, restaurante={}, cliente={}, total={}",
-                saved.getOrderNumber(), restaurant.getSlug(), saved.getCustomerName(), saved.getTotalAmount());
-
-        OrderResponse response = OrderResponse.from(saved);
-        orderEvents.orderCreated(response);
-        return response;
+    /** Devolución de inventario (cancelación o re-edición de ítems). */
+    private void restoreStock(Order order) {
+        for (OrderItem item : order.getItems()) {
+            if (item.getProductId() != null) {
+                try {
+                    productService.restoreStock(
+                            item.getProductId(), order.getRestaurantId(), item.getQuantity(), order.getId());
+                } catch (Exception e) {
+                    log.error("No se pudo devolver stock del pedido id={} producto={}: {}",
+                            order.getId(), item.getProductId(), e.getMessage());
+                }
+            }
+        }
     }
 
     private void recordStatus(Long orderId, OrderStatus from, OrderStatus to) {
@@ -356,48 +400,13 @@ public class OrderService {
         if (orders.isEmpty()) {
             return List.of();
         }
-        if (order.getStatus() == OrderStatus.DELIVERED && newStatus != OrderStatus.DELIVERED) {
-            throw new BadRequestException("No se puede modificar un pedido que ya fue entregado");
-        }
-
-        order.setStatus(newStatus);
-        Order updated = orderRepository.save(order);
-        log.info("Estado de pedido actualizado: id={}, num={}, nuevoEstado={}", updated.getId(), updated.getOrderNumber(), newStatus);
-
-        // Al cancelar se devuelve el stock descontado al crear el pedido.
-        if (newStatus == OrderStatus.CANCELLED) {
-            for (OrderItem item : updated.getItems()) {
-                if (item.getProductId() != null) {
-                    try {
-                        productService.restoreStock(
-                                item.getProductId(), restaurantId, item.getQuantity(), updated.getId());
-                    } catch (Exception e) {
-                        log.error("No se pudo devolver stock del pedido id={} producto={}: {}",
-                                updated.getId(), item.getProductId(), e.getMessage());
-                    }
-                }
-            }
-        }
-
-        if (newStatus == OrderStatus.DELIVERED) {
-            try {
-                whatsAppNotificationService.sendOrderReadyNotification(updated);
-            } catch (Exception e) {
-                log.error("Error al notificar WhatsApp para pedido id={}: {}", updated.getId(), e.getMessage());
-            }
-        }
-
-        OrderResponse response = OrderResponse.from(updated);
-        orderEvents.statusChanged(response);
-        return response;
-    }
-
-    @Transactional
-    public boolean notifyWhatsAppMine(Long id) {
-        Long restaurantId = SecurityUtils.currentRestaurantId();
-        Order order = orderRepository.findByIdAndRestaurantId(id, restaurantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
-        return whatsAppNotificationService.sendOrderReadyNotification(order);
+        List<Long> ids = orders.stream().map(Order::getId).toList();
+        Map<Long, List<OrderStatusHistory>> byOrder = historyRepository
+                .findByOrderIdInOrderByChangedAtAsc(ids).stream()
+                .collect(java.util.stream.Collectors.groupingBy(OrderStatusHistory::getOrderId));
+        return orders.stream()
+                .map(o -> OrderResponse.from(o, byOrder.getOrDefault(o.getId(), List.of())))
+                .toList();
     }
 
     private String generatePrefix(String slug) {

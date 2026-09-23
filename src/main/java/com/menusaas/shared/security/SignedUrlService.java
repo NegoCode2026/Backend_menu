@@ -34,6 +34,12 @@ public class SignedUrlService {
      * Construye una URL firmada con expiración para un fileId almacenado.
      */
     public String buildSignedUrl(String fileId) {
+        if (fileId == null || fileId.isBlank()) {
+            return null;
+        }
+        if (fileId.startsWith("data:image/") || fileId.startsWith("http://") || fileId.startsWith("https://") || fileId.startsWith("//")) {
+            return fileId;
+        }
         long expiresAt = Instant.now().plusSeconds(ttlSeconds).getEpochSecond();
         String signature = sign(fileId, expiresAt);
         return apiBaseUrl + "/api/public/files/" + fileId + "?exp=" + expiresAt + "&sig=" + signature;
@@ -41,14 +47,25 @@ public class SignedUrlService {
 
     /**
      * Convierte el valor almacenado en BD a una URL firmada (o lo devuelve tal cual
-     * si es una URL externa legítima cargada por el cliente).
+     * si es una cadena Base64 Data URI o URL externa legítima cargada por el cliente).
      */
     public String toSignedUrlOrNull(String stored) {
         if (stored == null || stored.isBlank()) {
             return null;
         }
         String trimmed = stored.trim();
-        if (trimmed.contains("://") || trimmed.startsWith("/")) {
+        // Base64 Data URI
+        if (trimmed.startsWith("data:image/")) {
+            return trimmed;
+        }
+        // Si es una URL interna (contiene /api/public/files/), extraemos el fileId y re-firmamos
+        // con expiración actual para garantizar que la firma siempre sea válida y fresca.
+        if (trimmed.contains("/api/public/files/")) {
+            String fileId = toStoredValue(trimmed);
+            return buildSignedUrl(fileId);
+        }
+        // Si es una URL externa legítima (p. ej. Cloudinary, Unsplash, etc.) o ruta absoluta de asset
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("//") || trimmed.startsWith("/")) {
             return trimmed;
         }
         // Nombre de archivo simple (fileId) → URL firmada con expiración.
@@ -59,15 +76,17 @@ public class SignedUrlService {
     }
 
     /**
-     * Convierte un valor aceptado por el cliente (fileId, URL firmada interna o
-     * URL externa) en el valor que se almacena en BD: un simple fileId sin firma,
-     * para que las imágenes no caduquen y el backend siempre las sirva firmadas.
+     * Convierte un valor aceptado por el cliente (Base64 Data URI, fileId, URL firmada interna o
+     * URL externa) en el valor que se almacena en BD.
      */
     public String toStoredValue(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String trimmed = value.trim();
+        if (trimmed.startsWith("data:image/")) {
+            return trimmed;
+        }
         final String marker = "/api/public/files/";
         int idx = trimmed.indexOf(marker);
         if (idx >= 0) {

@@ -88,6 +88,12 @@ public class RestaurantService {
                 .orElseThrow(() -> new ResourceNotFoundException("El menú digital no existe o no está disponible"));
     }
 
+    @Transactional
+    public Restaurant findByIdForUpdateOrThrow(Long id) {
+        return restaurantRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+    }
+
     @Transactional(readOnly = true)
     public java.util.List<Restaurant> findAllActiveOrderedByName() {
         return restaurantRepository.findAllByActiveTrueOrderByNameAsc();
