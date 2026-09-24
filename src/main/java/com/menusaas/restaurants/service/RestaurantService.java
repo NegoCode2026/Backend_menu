@@ -108,6 +108,17 @@ public class RestaurantService {
         return restaurantRepository.getReferenceById(id);
     }
 
+    /**
+     * Slug del restaurante (para QR/URLs públicas del propio tenant).
+     * Puerta de acceso para qr: evita que los controllers toquen RestaurantRepository.
+     */
+    @Transactional(readOnly = true)
+    public String slugOrThrow(Long restaurantId) {
+        return restaurantRepository.findById(restaurantId)
+                .map(Restaurant::getSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+    }
+
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {
         String slug = request.slug().trim();
         if (!slug.equals(restaurant.getSlug()) && restaurantRepository.existsBySlug(slug)) {

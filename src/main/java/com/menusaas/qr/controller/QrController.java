@@ -2,8 +2,7 @@ package com.menusaas.qr.controller;
 
 import com.menusaas.config.AppProperties;
 import com.menusaas.qr.service.QrCodeService;
-import com.menusaas.restaurants.repository.RestaurantRepository;
-import com.menusaas.shared.api.ResourceNotFoundException;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 public class QrController {
 
     private final QrCodeService qrCodeService;
-    private final RestaurantRepository restaurantRepository;
+    private final RestaurantService restaurantService;
     private final AppProperties appProperties;
 
     @Operation(summary = "Descargar QR del menú en PNG")
@@ -69,9 +68,6 @@ public class QrController {
     }
 
     private String slugOfCurrentRestaurant() {
-        Long restaurantId = SecurityUtils.currentRestaurantId();
-        return restaurantRepository.findById(restaurantId)
-                .map(r -> r.getSlug())
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+        return restaurantService.slugOrThrow(SecurityUtils.currentRestaurantId());
     }
 }
