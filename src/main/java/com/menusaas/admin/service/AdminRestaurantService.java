@@ -71,15 +71,9 @@ public class AdminRestaurantService {
                 id -> userRepository.findByRestaurantId(id, Role.RESTAURANT_ADMIN)
                         .stream().findFirst().map(User::getEmail).orElse("N/A")));
 
-        return page.map(r -> new AdminRestaurantResponse(
-                r.getId(),
-                r.getName(),
-                r.getSlug(),
+        return page.map(r -> AdminRestaurantResponse.from(
+                r,
                 signedUrlService.toSignedUrlOrNull(r.getLogoUrl()),
-                r.getPhone(),
-                r.getAddress(),
-                r.isActive(),
-                r.getCreatedAt(),
                 userCounts.getOrDefault(r.getId(), 0L),
                 productRepository.countByRestaurantId(r.getId()),
                 planNames.getOrDefault(r.getId(), "Sin plan"),
@@ -144,15 +138,9 @@ public class AdminRestaurantService {
         auditService.log("RESTAURANT_CREATED", "restaurant", restaurant.getId(),
                 "slug=" + slug + ", admin=" + email + ", plan=" + plan.getCode());
 
-        return new AdminRestaurantResponse(
-                restaurant.getId(),
-                restaurant.getName(),
-                restaurant.getSlug(),
+        return AdminRestaurantResponse.from(
+                restaurant,
                 null,
-                restaurant.getPhone(),
-                restaurant.getAddress(),
-                restaurant.isActive(),
-                restaurant.getCreatedAt(),
                 1L,
                 0L,
                 plan.getName(),

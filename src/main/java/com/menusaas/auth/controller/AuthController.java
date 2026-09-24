@@ -32,7 +32,7 @@ public class AuthController {
                                               HttpServletResponse response) {
         AuthService.AuthResult result = authService.register(request);
         writeCookies(response, result);
-        return ApiResponse.ok("Registro exitoso", new AuthResponse(result.user()));
+        return ApiResponse.ok("Registro exitoso", AuthResponse.from(result.user()));
     }
 
     @Operation(summary = "Iniciar sesión")
@@ -41,7 +41,7 @@ public class AuthController {
                                            HttpServletResponse response) {
         AuthService.AuthResult result = authService.login(request);
         writeCookies(response, result);
-        return ApiResponse.ok("Login exitoso", new AuthResponse(result.user()));
+        return ApiResponse.ok("Login exitoso", AuthResponse.from(result.user()));
     }
 
     @Operation(summary = "Renovar tokens con la cookie refresh_token (rotación)")
@@ -49,7 +49,7 @@ public class AuthController {
     public ApiResponse<AuthResponse> refresh(HttpServletRequest request, HttpServletResponse response) {
         AuthService.AuthResult result = authService.refresh(cookieService.readRefreshToken(request));
         writeCookies(response, result);
-        return ApiResponse.ok("Tokens renovados", new AuthResponse(result.user()));
+        return ApiResponse.ok("Tokens renovados", AuthResponse.from(result.user()));
     }
 
     @Operation(summary = "Cerrar sesión (revoca el refresh token y limpia cookies)")

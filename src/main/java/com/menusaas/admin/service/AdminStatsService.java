@@ -28,7 +28,7 @@ public class AdminStatsService {
     @Cacheable(value = "adminStats", unless = "#result == null")
     @Transactional(readOnly = true)
     public AdminStatsResponse getStats() {
-        return new AdminStatsResponse(
+        return AdminStatsResponse.from(
                 restaurantRepository.count(),
                 restaurantRepository.countByActive(true),
                 userRepository.count(),

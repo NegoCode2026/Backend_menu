@@ -340,12 +340,6 @@ public class ProductService {
     }
 
     private ProductResponse toResponse(Product p) {
-        return new ProductResponse(
-                p.getId(), p.getRestaurantId(), p.getCategoryId(), p.getName(), p.getDescription(),
-                p.getPrice(), signedUrlService.toSignedUrlOrNull(p.getImageUrl()), p.isAvailable(), p.getPosition(),
-                p.getCostPrice(), p.getStockQuantity(), p.getLowStockThreshold(), p.isTrackStock(),
-                p.isTrackStock() && p.getStockQuantity() <= p.getLowStockThreshold(),
-                p.getCreatedAt(), p.getUpdatedAt()
-        );
+        return ProductResponse.from(p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()));
     }
 }

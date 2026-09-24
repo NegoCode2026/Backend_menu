@@ -92,7 +92,7 @@ public class ProfitReportService {
                     entry.getKey(), acc.revenue, acc.cost,
                     acc.revenue.subtract(acc.cost), acc.orders));
         }
-        return new ProfitsResponse(normalized, from, to, revenue, cost, revenue.subtract(cost), count, days);
+        return ProfitsResponse.from(normalized, from, to, revenue, cost, count, days);
     }
 
     private static class Acc {

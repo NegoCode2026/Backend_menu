@@ -26,12 +26,12 @@ public class CategoryService {
     @Transactional(readOnly = true)
     public Page<CategoryResponse> listMine(Pageable pageable) {
         return categoryRepository.findByRestaurantIdOrderByPositionAsc(SecurityUtils.currentRestaurantId(), pageable)
-                .map(this::toResponse);
+                .map(CategoryResponse::from);
     }
 
     @Transactional(readOnly = true)
     public CategoryResponse getMine(Long id) {
-        return toResponse(findScoped(id));
+        return CategoryResponse.from(findScoped(id));
     }
 
     @Transactional
@@ -47,7 +47,7 @@ public class CategoryService {
                 .position(request.position() != null ? request.position() : (int) categoryRepository.countByRestaurantId(restaurantId) + 1)
                 .active(request.active() == null || request.active())
                 .build();
-        return toResponse(categoryRepository.save(category));
+        return CategoryResponse.from(categoryRepository.save(category));
     }
 
     @Transactional
@@ -61,7 +61,7 @@ public class CategoryService {
         if (request.description() != null) category.setDescription(request.description());
         if (request.position() != null) category.setPosition(request.position());
         if (request.active() != null) category.setActive(request.active());
-        return toResponse(categoryRepository.save(category));
+        return CategoryResponse.from(categoryRepository.save(category));
     }
 
     @Transactional
@@ -104,12 +104,5 @@ public class CategoryService {
     private Category findScoped(Long id) {
         return categoryRepository.findByIdAndRestaurantId(id, SecurityUtils.currentRestaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada"));
-    }
-
-    private CategoryResponse toResponse(Category c) {
-        return new CategoryResponse(
-                c.getId(), c.getRestaurantId(), c.getName(), c.getDescription(),
-                c.getPosition(), c.isActive(), c.getCreatedAt(), c.getUpdatedAt()
-        );
     }
 }

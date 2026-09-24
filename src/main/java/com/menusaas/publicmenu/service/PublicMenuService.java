@@ -43,10 +43,7 @@ public class PublicMenuService {
                             .stream()
                             .map(this::toProductInfo)
                             .toList();
-                    return new PublicMenuResponse.CategoryInfo(
-                            category.getId(), category.getName(), category.getDescription(),
-                            category.getPosition(), products
-                    );
+                    return PublicMenuResponse.CategoryInfo.from(category, products);
                 })
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
 
@@ -58,26 +55,32 @@ public class PublicMenuService {
                 .map(this::toProductInfo)
                 .toList();
         if (!loose.isEmpty()) {
-            categoryInfos.add(new PublicMenuResponse.CategoryInfo(
-                    0L, "Sin categoría", null, Integer.MAX_VALUE, loose));
+            categoryInfos.add(PublicMenuResponse.CategoryInfo.uncategorized(loose));
         }
 
-        return new PublicMenuResponse(
-                new PublicMenuResponse.RestaurantInfo(
-                        restaurant.getName(), restaurant.getSlug(),
-                        signedUrlService.toSignedUrlOrNull(restaurant.getLogoUrl()),
-                        restaurant.getDescription(), restaurant.getPhone(), restaurant.getAddress(),
-                        restaurant.getWhatsapp(), restaurant.getInstagram(), restaurant.getFacebook(),
-                        restaurant.isOpen()
-                ),
+        return PublicMenuResponse.from(
+                PublicMenuResponse.RestaurantInfo.from(
+                        restaurant, signedUrlService.toSignedUrlOrNull(restaurant.getLogoUrl())),
                 categoryInfos
         );
     }
 
+    /**
+     * Directorio público de restaurantes activos con conteo de productos
+     * disponibles (módulo Explore).
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<com.menusaas.restaurants.dto.DirectoryRestaurantResponse> getDirectory() {
+        java.util.List<Restaurant> restaurants = restaurantService.findAllActiveOrderedByName();
+        java.util.Map<Long, Long> productCounts = productService.countAvailableGroupedByRestaurant();
+        return restaurants.stream()
+                .map(r -> com.menusaas.restaurants.dto.DirectoryRestaurantResponse.from(
+                        r, productCounts.getOrDefault(r.getId(), 0L)))
+                .toList();
+    }
+
     private PublicMenuResponse.ProductInfo toProductInfo(Product p) {
-        return new PublicMenuResponse.ProductInfo(
-                p.getId(), p.getName(), p.getDescription(), p.getPrice(),
-                signedUrlService.toSignedUrlOrNull(p.getImageUrl()), p.isAvailable()
-        );
+        return PublicMenuResponse.ProductInfo.from(
+                p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()));
     }
 }

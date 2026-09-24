@@ -1,5 +1,7 @@
 package com.menusaas.subscriptions.dto;
 
+import com.menusaas.subscriptions.entity.Subscription;
+
 import java.time.Instant;
 
 public record SubscriptionResponse(
@@ -12,4 +14,11 @@ public record SubscriptionResponse(
         Instant startsAt,
         Instant endsAt
 ) {
+    public static SubscriptionResponse from(Subscription s, PlanResponse plan) {
+        return new SubscriptionResponse(
+                s.getId(), s.getRestaurantId(), plan,
+                s.getStatus(), s.getProvider(), s.getProviderReference(),
+                s.getStartsAt(), s.getEndsAt()
+        );
+    }
 }

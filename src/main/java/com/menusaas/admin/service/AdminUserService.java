@@ -38,16 +38,7 @@ public class AdminUserService {
         }
         final String roleFilter = normalizedRole;
         Page<User> page = userRepository.search(search, roleFilter, active, pageable);
-        return page.map(u -> new AdminUserResponse(
-                u.getId(),
-                u.getName(),
-                u.getEmail(),
-                u.getRole().getName(),
-                u.isActive(),
-                u.getCreatedAt(),
-                u.getRestaurant() != null ? u.getRestaurant().getId() : null,
-                u.getRestaurant() != null ? u.getRestaurant().getName() : "Plataforma (Global)"
-        ));
+        return page.map(AdminUserResponse::from);
     }
 
     /** Compat con callers antiguos. */

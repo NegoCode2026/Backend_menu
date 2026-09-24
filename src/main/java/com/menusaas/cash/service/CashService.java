@@ -64,7 +64,7 @@ public class CashService {
                 .map(CashClosingResponse::from)
                 .orElse(null);
 
-        return new CashTodayResponse(date, cash, card, transfer, cash.add(card).add(transfer),
+        return CashTodayResponse.from(date, cash, card, transfer,
                 delivered.size(), unpaid, closing);
     }
 

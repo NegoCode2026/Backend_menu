@@ -156,10 +156,6 @@ public class RestaurantService {
     }
 
     private RestaurantResponse toResponse(Restaurant r) {
-        return new RestaurantResponse(
-                r.getId(), r.getName(), r.getSlug(), signedUrlService.toSignedUrlOrNull(r.getLogoUrl()), r.getDescription(),
-                r.getPhone(), r.getAddress(), r.getWhatsapp(), r.getInstagram(), r.getFacebook(),
-                r.isActive(), r.isOpen(), r.getCreatedAt(), r.getUpdatedAt()
-        );
+        return RestaurantResponse.from(r, signedUrlService.toSignedUrlOrNull(r.getLogoUrl()));
     }
 }

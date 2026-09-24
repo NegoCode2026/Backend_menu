@@ -264,7 +264,7 @@ public class OrderService {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         Instant todayStart = LocalDate.now(ZoneId.systemDefault()).atStartOfDay(ZoneId.systemDefault()).toInstant();
 
-        return new OrderStatsResponse(
+        return OrderStatsResponse.from(
                 orderRepository.countByRestaurantId(restaurantId),
                 orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.PENDING),
                 orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.CONFIRMED),
