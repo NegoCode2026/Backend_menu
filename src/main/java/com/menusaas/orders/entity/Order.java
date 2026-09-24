@@ -17,7 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 @Entity
 @Table(name = "orders")
-public class Order {
+public class Order implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

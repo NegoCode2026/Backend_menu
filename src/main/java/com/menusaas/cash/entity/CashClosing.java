@@ -16,7 +16,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Entity
 @Table(name = "cash_closings")
-public class CashClosing {
+public class CashClosing implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

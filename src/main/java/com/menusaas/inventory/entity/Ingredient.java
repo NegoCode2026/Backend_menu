@@ -15,7 +15,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "ingredients")
-public class Ingredient {
+public class Ingredient implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

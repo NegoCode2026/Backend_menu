@@ -13,7 +13,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "role_permissions")
-public class RolePermission {
+public class RolePermission implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

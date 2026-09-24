@@ -13,7 +13,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "stock_movements")
-public class StockMovement {
+public class StockMovement implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -18,7 +18,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "subscriptions")
-public class Subscription {
+public class Subscription implements com.menusaas.shared.tenancy.TenantOwned {
 
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_PENDING = "PENDING";
