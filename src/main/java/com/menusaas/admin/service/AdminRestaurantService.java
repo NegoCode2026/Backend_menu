@@ -55,30 +55,48 @@ public class AdminRestaurantService {
     public Page<AdminRestaurantResponse> listRestaurants(String search, Boolean active, Pageable pageable) {
         Page<Restaurant> page = restaurantRepository.search(search, active, pageable);
         List<Long> ids = page.getContent().stream().map(Restaurant::getId).toList();
+        if (ids.isEmpty()) {
+            return page.map(r -> AdminRestaurantResponse.from(r, null, 0L, 0L, "Sin plan", "N/A"));
+        }
 
-        Map<Long, Long> userCounts = ids.isEmpty() ? Map.of() : userRepository.findAll().stream()
-                .filter(u -> u.getRestaurant() != null && ids.contains(u.getRestaurant().getId()))
-                .collect(Collectors.groupingBy(u -> u.getRestaurant().getId(), Collectors.counting()));
-        Map<Long, String> planNames = ids.stream().collect(Collectors.toMap(
-                id -> id,
-                id -> subscriptionRepository.findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(
-                                id, Subscription.STATUS_ACTIVE)
-                        .flatMap(s -> planRepository.findById(s.getPlanId()))
-                        .map(Plan::getName)
-                        .orElse("Sin plan")));
-        Map<Long, String> adminEmails = ids.stream().collect(Collectors.toMap(
-                id -> id,
-                id -> userRepository.findByRestaurantId(id, Role.RESTAURANT_ADMIN)
-                        .stream().findFirst().map(User::getEmail).orElse("N/A")));
+        // Consultas agregadas por lote: 5 queries en total, sin N+1.
+        Map<Long, Long> userCounts = toCountMap(userRepository.countGroupedByRestaurantIds(ids));
+        Map<Long, Long> productCounts = toCountMap(productRepository.countGroupedByRestaurantIds(ids));
+        Map<Long, String> adminEmails = userRepository
+                .findByRestaurantIdsAndRole(ids, Role.RESTAURANT_ADMIN).stream()
+                .filter(u -> u.getRestaurant() != null)
+                .collect(Collectors.toMap(
+                        u -> u.getRestaurant().getId(), User::getEmail, (a, b) -> a));
+        Map<Long, Subscription> activeSubs = subscriptionRepository
+                .findByRestaurantIdsAndStatusOrderByCreatedAtDesc(ids, Subscription.STATUS_ACTIVE).stream()
+                .collect(Collectors.toMap(
+                        Subscription::getRestaurantId, s -> s, (a, b) -> a));
+        Map<Long, String> planNames = planRepository.findAllById(
+                        activeSubs.values().stream().map(Subscription::getPlanId).toList()).stream()
+                .collect(Collectors.toMap(Plan::getId, Plan::getName));
 
         return page.map(r -> AdminRestaurantResponse.from(
                 r,
                 signedUrlService.toSignedUrlOrNull(r.getLogoUrl()),
                 userCounts.getOrDefault(r.getId(), 0L),
-                productRepository.countByRestaurantId(r.getId()),
-                planNames.getOrDefault(r.getId(), "Sin plan"),
+                productCounts.getOrDefault(r.getId(), 0L),
+                planNameOf(r.getId(), activeSubs, planNames),
                 adminEmails.getOrDefault(r.getId(), "N/A")
         ));
+    }
+
+    private static Map<Long, Long> toCountMap(List<Object[]> rows) {
+        return rows.stream().collect(Collectors.toMap(
+                row -> (Long) row[0], row -> (Long) row[1], (a, b) -> a));
+    }
+
+    private static String planNameOf(
+            Long restaurantId, Map<Long, Subscription> activeSubs, Map<Long, String> planNames) {
+        Subscription sub = activeSubs.get(restaurantId);
+        if (sub == null) {
+            return "Sin plan";
+        }
+        return planNames.getOrDefault(sub.getPlanId(), "Sin plan");
     }
 
     /** Compat con callers antiguos: página grande sin filtros. */

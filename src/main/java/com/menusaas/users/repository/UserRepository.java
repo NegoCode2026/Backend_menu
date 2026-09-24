@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +28,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByRestaurantId(Long restaurantId, String roleName);
 
     long countByRestaurantId(Long restaurantId);
+
+    /**
+     * Conteo de usuarios agrupado por restaurante (panel admin: evita N+1).
+     */
+    @Query("select u.restaurant.id, count(u) from User u where u.restaurant.id in :ids group by u.restaurant.id")
+    List<Object[]> countGroupedByRestaurantIds(@Param("ids") Collection<Long> ids);
+
+    /**
+     * Usuarios con un rol dado en varios restaurantes (panel admin: evita N+1).
+     */
+    @Query("select u from User u join fetch u.role where u.restaurant.id in :ids and u.role.name = :role")
+    List<User> findByRestaurantIdsAndRole(@Param("ids") Collection<Long> ids, @Param("role") String role);
 
     @Query("""
             select u from User u
