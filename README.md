@@ -1,56 +1,48 @@
 # Backend — API Menu SaaS
 
-Spring Boot 3.5 (Java 21) + Spring Security/JWT + PostgreSQL (Flyway) + OpenAPI.
+Plataforma SaaS de menús digitales para restaurantes: catálogo (categorías/productos),
+pedidos (staff + públicos por slug), inventario (ingredientes/recetas/kardex), caja,
+reportes de utilidad, suscripciones (ePayco/manual), archivos, QR, menú público,
+realtime por WebSocket y backoffice multi-tenant.
 
-## Ejecutar
+Monolito modular (Java 21, Spring Boot 3.5, Maven): `com.menusaas.<modulo>` con
+`controller/dto/entity/repository/service`. Detalle en `docs/ARCHITECTURE.md` y
+convenciones en `docs/CONVENTIONS.md`.
+
+## Levantar en local
 
 ```bash
-# Con Postgres local (ver docker-compose en infrastructure/)
-DB_URL=jdbc:postgresql://localhost:5432/menu_saas DB_USER=menu_saas DB_PASSWORD=menu_saas \
+# 1) Copiar variables (nunca commitear el .env)
+cp .env.example .env   # completar JWT_SECRET con: openssl rand -base64 64
+
+# 2a) Con Docker (Postgres + backend)
+docker compose up --build
+
+# 2b) Sin Docker: Postgres local en 5433 y backend con Maven
 ./mvnw spring-boot:run
 ```
 
 - API: http://localhost:8080
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- Health: http://localhost:8080/actuator/health
-
-## Configuración por variables de entorno
-
-| Variable | Default | Descripción |
-|---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/menu_saas` | JDBC URL |
-| `DB_USER` / `DB_PASSWORD` | `menu_saas` | Credenciales |
-| `JWT_SECRET` | (dev) | Clave HS256 (>= 32 bytes) — `openssl rand -base64 64` |
-| `JWT_ACCESS_TTL` | 15 | Minutos del access token |
-| `JWT_REFRESH_TTL` | 7 | Días del refresh token |
-| `CORS_ALLOWED_ORIGINS` | localhost:4200 | Orígenes permitidos (coma separada) |
-| `APP_BASE_URL` | `http://localhost:4200` | Base de la app web (para el QR) |
-| `UPLOAD_DIR` | `./uploads` | Directorio de imágenes |
-
-## Multi-tenancy
-
-El `restaurantId` se deriva **siempre** del JWT (`rid`). Las consultas filtran por tenant;
-los ids de otros restaurantes devuelven 404 (no 403) para no revelar existencia.
-
-## Módulos
-
-```
-com.menusaas
-├── auth/          # register, login, refresh (rotación), logout
-├── users/         # usuarios del restaurante
-├── restaurants/   # configuración del restaurante
-├── categories/    # categorías del menú
-├── products/      # productos
-├── menus/         # menú público por slug (sin auth)
-├── qr/            # QR PNG/PDF → app-base-url/menu/{slug}
-├── subscriptions/ # planes y suscripción (manual en MVP)
-├── files/         # upload de imágenes (local, extensible a Cloudinary)
-├── shared/        # API envelope, errores, seguridad
-└── config/        # security, CORS, OpenAPI, propiedades
-```
+- Swagger UI (solo dev): http://localhost:8080/swagger-ui.html
+- Salud: http://localhost:8080/actuator/health
 
 ## Tests
 
 ```bash
-./mvnw test          # unitarios + integración (Testcontainers requiere Docker)
+./mvnw verify   # unitarios + integración (Testcontainers requiere Docker) + JaCoCo
 ```
+
+Reglas de arquitectura (`ModuleBoundariesTest`, `TenantRepositoriesTest`) y
+aislamiento por tenant (`TenantIsolationIT`) corren dentro del mismo `verify`.
+
+## Variables de entorno (solo nombres)
+
+Base de datos: `DB_URL`, `DB_USER`, `DB_PASSWORD`.
+JWT/sesión: `JWT_SECRET` (obligatorio), `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL_HOURS`.
+Web/seguridad: `CORS_ALLOWED_ORIGINS`, `APP_BASE_URL`, `API_BASE_URL`, `UPLOAD_DIR`,
+`COOKIES_SECURE`, `COOKIE_SAMESITE`, `SIGNED_URL_TTL`, `SESSION_ABSOLUTE_TTL_HOURS`,
+`AUTH_RATE_LIMIT_PER_MINUTE`, `PORT`, `SPRING_PROFILES_ACTIVE`.
+Pagos: `EPAYCO_PUBLIC_KEY`, `EPAYCO_PRIVATE_KEY`, `EPAYCO_CUSTOMER_ID`, `EPAYCO_P_KEY`.
+Archivos: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_URL`.
+
+Ver valores de ejemplo y cómo generar secretos en `.env.example`.
