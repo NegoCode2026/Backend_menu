@@ -1,9 +1,7 @@
 package com.menusaas.products;
 
-import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.inventory.repository.IngredientRepository;
-import com.menusaas.inventory.repository.RecipeItemRepository;
-import com.menusaas.shared.security.SignedUrlService;
+import com.menusaas.categories.service.CategoryService;
+import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.products.dto.ProductRequest;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.repository.ProductRepository;

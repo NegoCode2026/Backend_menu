@@ -67,12 +67,12 @@ public class CategoryService {
     @Transactional
     public void deleteMine(Long id) {
         Category category = findScoped(id);
-        productService.deleteByCategoryAndRestaurant(category.getId(), category.getRestaurantId());
         categoryRepository.delete(category);
     }
 
     // ------------------------------------------------------------------
-    // Consultas explícitas por tenant (sin SecurityUtils) para publicmenu.
+    // Consultas explícitas por tenant (sin SecurityUtils) para publicmenu
+    // y products: evita que otros módulos toquen CategoryRepository.
     // ------------------------------------------------------------------
 
     @Transactional(readOnly = true)
@@ -81,6 +81,24 @@ public class CategoryService {
                 .stream()
                 .filter(Category::isActive)
                 .toList();
+    }
+
+    /**
+     * ¿La categoría pertenece al restaurante? (para validar categoryId ajenos).
+     */
+    @Transactional(readOnly = true)
+    public boolean existsInRestaurant(Long categoryId, Long restaurantId) {
+        return categoryRepository.existsByIdAndRestaurantId(categoryId, restaurantId);
+    }
+
+    /**
+     * Exige pertenencia al tenant o 404 (misma respuesta que un id inexistente).
+     */
+    @Transactional(readOnly = true)
+    public void requireInRestaurant(Long categoryId, Long restaurantId) {
+        if (!existsInRestaurant(categoryId, restaurantId)) {
+            throw new ResourceNotFoundException("Categoría no encontrada en este restaurante");
+        }
     }
 
     private Category findScoped(Long id) {

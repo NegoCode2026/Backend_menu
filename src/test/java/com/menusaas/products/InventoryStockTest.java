@@ -1,8 +1,6 @@
 package com.menusaas.products;
 
-import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.inventory.repository.IngredientRepository;
-import com.menusaas.inventory.repository.RecipeItemRepository;
+import com.menusaas.categories.service.CategoryService;
 import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.repository.ProductRepository;
@@ -30,7 +28,7 @@ class InventoryStockTest {
     private ProductRepository productRepository;
 
     @Mock
-    private CategoryRepository categoryRepository;
+    private CategoryService categoryService;
 
     @Mock
     private SignedUrlService signedUrlService;
@@ -38,17 +36,11 @@ class InventoryStockTest {
     @Mock
     private InventoryService inventoryService;
 
-    @Mock
-    private IngredientRepository ingredientRepository;
-
-    @Mock
-    private RecipeItemRepository recipeItemRepository;
-
     private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryRepository, signedUrlService, inventoryService, ingredientRepository, recipeItemRepository);
+        productService = new ProductService(productRepository, categoryService, signedUrlService, inventoryService);
     }
 
     private Product tracked(Long id, int stock) {
