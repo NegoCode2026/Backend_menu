@@ -121,7 +121,7 @@ public class OrderService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
-        applyItems(order, restaurantId, request.items());
+        applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
         // Generación de consecutivo de pedido (ej. FMIX-0001)
         long count = orderRepository.countOrdersForRestaurant(restaurantId);
@@ -156,7 +156,7 @@ public class OrderService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
-        applyItems(order, restaurantId, request.items());
+        applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
         long count = orderRepository.countOrdersForRestaurant(restaurantId);
         order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
@@ -202,7 +202,7 @@ public class OrderService {
             }
             // Los ítems cambian: se devuelve el stock anterior y se descuenta el nuevo.
             restoreStock(order);
-            applyItems(order, order.getRestaurantId(), request.items());
+            applyItems(order, order.getRestaurantId(), request.items(), request.discountAmount(), request.tipAmount());
         }
 
         Order updated = orderRepository.save(order);
@@ -355,8 +355,10 @@ public class OrderService {
     /**
      * Valida productos del tenant, calcula totales y congela el costo
      * unitario (snapshot para utilidades históricas).
+     * Total = subtotal ítems - descuento (tope: subtotal) + propina.
      */
-    private void applyItems(Order order, Long restaurantId, List<OrderItemRequest> itemRequests) {
+    private void applyItems(Order order, Long restaurantId, List<OrderItemRequest> itemRequests,
+                            BigDecimal discountAmount, BigDecimal tipAmount) {
         order.getItems().clear();
         BigDecimal total = BigDecimal.ZERO;
 
@@ -395,7 +397,21 @@ public class OrderService {
             order.addItem(item);
         }
 
-        order.setTotalAmount(total);
+        BigDecimal subtotal = total;
+        BigDecimal discount = discountAmount != null ? discountAmount : BigDecimal.ZERO;
+        if (discount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException("El descuento no puede ser negativo");
+        }
+        if (discount.compareTo(subtotal) > 0) {
+            discount = subtotal;
+        }
+        BigDecimal tip = tipAmount != null ? tipAmount : BigDecimal.ZERO;
+        if (tip.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException("La propina no puede ser negativa");
+        }
+        order.setDiscountAmount(discount);
+        order.setTipAmount(tip);
+        order.setTotalAmount(subtotal.subtract(discount).add(tip));
     }
 
     /** Descuento de inventario con orderId ya generado (misma transacción). */
@@ -457,3 +473,4 @@ public class OrderService {
         return (clean + "ORD").substring(0, 4);
     }
 }
+

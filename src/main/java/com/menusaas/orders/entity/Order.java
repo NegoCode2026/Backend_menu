@@ -66,6 +66,16 @@ public class Order {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
+    /** Descuento aplicado (resta). Nunca supera el subtotal. */
+    @Column(name = "discount_amount", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    /** Propina (suma). */
+    @Column(name = "tip_amount", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal tipAmount = BigDecimal.ZERO;
+
     /** Cómo se pagó (se fija al cobrar, no al entregar). */
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", length = 20)

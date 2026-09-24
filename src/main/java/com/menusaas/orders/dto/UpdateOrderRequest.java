@@ -2,8 +2,10 @@ package com.menusaas.orders.dto;
 
 import com.menusaas.orders.entity.OrderType;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public record UpdateOrderRequest(
@@ -22,6 +24,12 @@ public record UpdateOrderRequest(
         String notes,
 
         OrderType orderType,
+
+        @DecimalMin(value = "0.00", message = "El descuento no puede ser negativo")
+        BigDecimal discountAmount,
+
+        @DecimalMin(value = "0.00", message = "La propina no puede ser negativa")
+        BigDecimal tipAmount,
 
         @Valid
         List<OrderItemRequest> items
