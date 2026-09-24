@@ -11,7 +11,7 @@ import com.menusaas.orders.service.WhatsAppNotificationService;
 import com.menusaas.permissions.repository.RolePermissionRepository;
 import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.products.service.ProductService;
-import com.menusaas.realtime.OrderEventPublisher;
+import com.menusaas.orders.events.OrderEventPublisher;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ForbiddenException;

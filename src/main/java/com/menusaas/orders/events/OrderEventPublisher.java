@@ -1,4 +1,4 @@
-package com.menusaas.realtime;
+package com.menusaas.orders.events;
 
 import com.menusaas.orders.dto.OrderResponse;
 import lombok.RequiredArgsConstructor;
@@ -6,9 +6,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
- * Publica eventos de dominio. El envío WebSocket ocurre en WsOrderRelay
- * con AFTER_COMMIT para no avisar antes de que el pedido exista en BD.
- * orders -> realtime (solo esta dirección).
+ * Publica eventos de dominio. El envío WebSocket ocurre en el relay de
+ * realtime con AFTER_COMMIT para no avisar antes de que el pedido exista en BD.
  */
 @Component
 @RequiredArgsConstructor

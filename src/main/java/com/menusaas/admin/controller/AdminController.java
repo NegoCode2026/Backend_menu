@@ -2,10 +2,10 @@ package com.menusaas.admin.controller;
 
 import com.menusaas.admin.dto.*;
 import com.menusaas.admin.entity.AuditLog;
-import com.menusaas.admin.repository.AuditLogRepository;
 import com.menusaas.admin.service.AdminRestaurantService;
 import com.menusaas.admin.service.AdminStatsService;
 import com.menusaas.admin.service.AdminUserService;
+import com.menusaas.admin.service.AuditService;
 import com.menusaas.shared.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,7 +28,7 @@ public class AdminController {
     private final AdminStatsService statsService;
     private final AdminRestaurantService restaurantService;
     private final AdminUserService userService;
-    private final AuditLogRepository auditLogRepository;
+    private final AuditService auditService;
 
     @Operation(summary = "Métricas globales de la plataforma (cache 30s)")
     @GetMapping("/stats")
@@ -82,9 +82,6 @@ public class AdminController {
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) Long entityId,
             @PageableDefault(size = 50, sort = "createdAt") Pageable pageable) {
-        if (entityType != null && entityId != null) {
-            return ApiResponse.ok(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable));
-        }
-        return ApiResponse.ok(auditLogRepository.findAllByOrderByCreatedAtDesc(pageable));
+        return ApiResponse.ok(auditService.list(entityType, entityId, pageable));
     }
 }
