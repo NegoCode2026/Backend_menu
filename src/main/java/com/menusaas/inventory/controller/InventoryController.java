@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.List;
 @Tag(name = "Inventory", description = "Existencias, alertas y kardex (tenant-scoped)")
 @RestController
 @RequestMapping("/api/inventory")
+@PreAuthorize("hasRole('RESTAURANT_ADMIN')")
 @RequiredArgsConstructor
 public class InventoryController {
 

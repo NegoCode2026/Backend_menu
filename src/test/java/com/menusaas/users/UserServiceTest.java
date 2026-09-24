@@ -70,6 +70,7 @@ class UserServiceTest {
     @Test
     void listMine_returnsOnlyUsersOfMyRestaurant() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentUser).thenReturn(principal(admin(9, 1)));
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(userRepository.findByRestaurantId(1L, null))
                     .thenReturn(List.of(user(1, 1, Role.RESTAURANT_USER, "u1@rest.com")));
@@ -82,8 +83,21 @@ class UserServiceTest {
     }
 
     @Test
+    void listMine_nonAdmin_throws403() {
+        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentUser)
+                    .thenReturn(principal(user(2, 1, Role.WAITER, "mesero@rest.com")));
+
+            assertThatThrownBy(() -> userService.listMine())
+                    .isInstanceOf(ForbiddenException.class);
+            verify(userRepository, never()).findByRestaurantId(any(), any());
+        }
+    }
+
+    @Test
     void getMine_fromOtherRestaurant_throws404() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentUser).thenReturn(principal(admin(9, 1)));
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(userRepository.findById(99L)).thenReturn(Optional.of(user(99, 2, Role.RESTAURANT_USER, "otro@rest.com")));
 

@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,18 +31,21 @@ public class SubscriptionController {
 
     @Operation(summary = "Mi suscripción actual")
     @GetMapping("/me")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<SubscriptionResponse> getMine() {
         return ApiResponse.ok(subscriptionService.getMySubscription());
     }
 
     @Operation(summary = "Suscribirse/cambiar a un plan (redirige a la pasarela si está configurada)")
     @PostMapping("/subscribe")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<SubscribeResult> subscribe(@Valid @RequestBody SubscriptionRequest request) {
         return ApiResponse.ok("Suscripción procesada", subscriptionService.subscribe(request));
     }
 
     @Operation(summary = "Cancelar la suscripción activa")
     @PostMapping("/cancel")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<SubscriptionResponse> cancel() {
         return ApiResponse.ok("Suscripción cancelada", subscriptionService.cancelMySubscription());
     }

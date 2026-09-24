@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Products", description = "Productos del menú (siempre del restaurante del JWT)")
@@ -41,18 +42,21 @@ public class ProductController {
     @Operation(summary = "Crear producto")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<ProductResponse> create(@Valid @RequestBody ProductRequest request) {
         return ApiResponse.ok("Producto creado", productService.createMine(request));
     }
 
     @Operation(summary = "Actualizar producto")
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<ProductResponse> update(@PathVariable Long id, @Valid @RequestBody ProductRequest request) {
         return ApiResponse.ok("Producto actualizado", productService.updateMine(id, request));
     }
 
     @Operation(summary = "Eliminar producto")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         productService.deleteMine(id);
         return ApiResponse.ok("Producto eliminado");

@@ -18,8 +18,10 @@ import com.menusaas.realtime.OrderEventPublisher;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.BadRequestException;
+import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
+import com.menusaas.users.entity.Role;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +75,25 @@ public class OrderService {
         ALLOWED_TRANSITIONS.put(OrderStatus.CONFIRMED, Set.of(OrderStatus.IN_PREPARATION, OrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(OrderStatus.IN_PREPARATION, Set.of(OrderStatus.READY, OrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(OrderStatus.READY, Set.of(OrderStatus.DELIVERED, OrderStatus.CANCELLED));
+    }
+
+    /**
+     * Quién puede llevar un pedido a cada estado. El front ya limita botones;
+     * esto lo blinda en la API (un mesero no puede cancelar ni mandar a cocina).
+     */
+    private static final Map<OrderStatus, Set<String>> ROLE_TRANSITIONS = new EnumMap<>(OrderStatus.class);
+
+    static {
+        ROLE_TRANSITIONS.put(OrderStatus.CONFIRMED, Set.of(
+                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER, Role.WAITER, Role.CASHIER));
+        ROLE_TRANSITIONS.put(OrderStatus.IN_PREPARATION, Set.of(
+                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER));
+        ROLE_TRANSITIONS.put(OrderStatus.READY, Set.of(
+                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER));
+        ROLE_TRANSITIONS.put(OrderStatus.DELIVERED, Set.of(
+                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER, Role.WAITER, Role.CASHIER));
+        ROLE_TRANSITIONS.put(OrderStatus.CANCELLED, Set.of(
+                Role.RESTAURANT_ADMIN, Role.CASHIER));
     }
 
     @Transactional
@@ -154,6 +175,11 @@ public class OrderService {
 
     @Transactional
     public OrderResponse updateMine(Long id, UpdateOrderRequest request) {
+        String role = SecurityUtils.currentUser().getRole();
+        if (!Role.RESTAURANT_ADMIN.equals(role) && !Role.RESTAURANT_USER.equals(role)
+                && !Role.CASHIER.equals(role)) {
+            throw new ForbiddenException("Tu rol no puede editar pedidos");
+        }
         Order order = getMineOrder(id);
         guardEditable(order);
 
@@ -267,6 +293,10 @@ public class OrderService {
         if (current != newStatus && !ALLOWED_TRANSITIONS.getOrDefault(current, Set.of()).contains(newStatus)) {
             throw new BadRequestException("No se puede pasar el pedido de " + current + " a " + newStatus);
         }
+        String role = SecurityUtils.currentUser().getRole();
+        if (!ROLE_TRANSITIONS.getOrDefault(newStatus, Set.of()).contains(role)) {
+            throw new ForbiddenException("Tu rol no puede llevar un pedido a " + newStatus);
+        }
 
         order.applyStatus(newStatus);
         Order updated = orderRepository.save(order);
@@ -299,13 +329,17 @@ public class OrderService {
 
     /**
      * Cobra un pedido ENTREGADO: fija método de pago y momento del cobro.
-     * Solo entregados se pueden cobrar; recobrar cambia el método.
+     * Solo caja y admin (el mesero entrega, no cobra).
      */
     @Transactional
     public OrderResponse payMine(Long id, com.menusaas.orders.entity.PaymentMethod paymentMethod) {
         Order order = getMineOrder(id);
         if (order.getStatus() != OrderStatus.DELIVERED) {
             throw new BadRequestException("Solo se puede cobrar un pedido entregado");
+        }
+        String role = SecurityUtils.currentUser().getRole();
+        if (!Role.RESTAURANT_ADMIN.equals(role) && !Role.CASHIER.equals(role)) {
+            throw new ForbiddenException("Solo caja o administración puede cobrar pedidos");
         }
         order.setPaymentMethod(paymentMethod);
         order.setPaidAt(java.time.Instant.now());

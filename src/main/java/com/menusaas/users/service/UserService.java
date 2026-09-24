@@ -29,6 +29,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserResponse> listMine() {
+        requireAdmin();
         Long restaurantId = SecurityUtils.currentRestaurantId();
         return userRepository.findByRestaurantId(restaurantId, null)
                 .stream()
@@ -38,6 +39,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserResponse getMine(Long id) {
+        requireAdmin();
         return UserResponse.from(findScoped(id));
     }
 

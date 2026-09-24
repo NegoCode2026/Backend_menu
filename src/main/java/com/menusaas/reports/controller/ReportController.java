@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ import java.time.LocalDate;
 @Tag(name = "Reports", description = "Ganancias por pedidos entregados (tenant-scoped)")
 @RestController
 @RequestMapping("/api/reports")
+@PreAuthorize("hasRole('RESTAURANT_ADMIN')")
 @RequiredArgsConstructor
 public class ReportController {
 

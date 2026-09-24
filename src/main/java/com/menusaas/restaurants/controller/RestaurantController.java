@@ -28,12 +28,14 @@ public class RestaurantController {
 
     @Operation(summary = "Actualizar mi restaurante")
     @PutMapping("/me")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<RestaurantResponse> updateMine(@Valid @RequestBody RestaurantRequest request) {
         return ApiResponse.ok("Restaurante actualizado", restaurantService.updateMine(request));
     }
 
     @Operation(summary = "Abrir o cerrar mi restaurante (bloquea nuevos pedidos al cerrar)")
     @PatchMapping("/me/open")
+    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
     public ApiResponse<RestaurantResponse> setOpenMine(@Valid @RequestBody RestaurantOpenRequest request) {
         return ApiResponse.ok("Estado actualizado", restaurantService.setOpenMine(request.open()));
     }

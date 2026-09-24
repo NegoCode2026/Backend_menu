@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -22,6 +23,7 @@ import java.util.List;
 @Tag(name = "Orders", description = "Gestión de pedidos del restaurante (tenant-scoped)")
 @RestController
 @RequestMapping("/api/orders")
+@PreAuthorize("hasAnyRole('RESTAURANT_ADMIN','RESTAURANT_USER','WAITER','CASHIER')")
 @RequiredArgsConstructor
 public class OrderController {
 
@@ -69,6 +71,7 @@ public class OrderController {
 
     @Operation(summary = "Cobrar un pedido entregado (método de pago)")
     @PostMapping("/{id}/pay")
+    @PreAuthorize("hasAnyRole('RESTAURANT_ADMIN','CASHIER')")
     public ApiResponse<OrderResponse> pay(@PathVariable Long id, @Valid @RequestBody PayOrderRequest request) {
         return ApiResponse.ok("Pedido cobrado", orderService.payMine(id, request.paymentMethod()));
     }
