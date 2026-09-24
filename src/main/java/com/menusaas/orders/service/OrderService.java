@@ -378,6 +378,10 @@ public class OrderService {
             if (!restaurantId.equals(product.getRestaurantId())) {
                 throw new BadRequestException("Producto no disponible en el menú: ID " + itemReq.productId());
             }
+            // Con receta se validan ingredientes; sin receta, el stock propio.
+            if (!productService.canFulfill(product.getId(), restaurantId, itemReq.quantity())) {
+                throw new BadRequestException("Sin existencias suficientes para '" + product.getName() + "'");
+            }
 
             BigDecimal unitPrice = product.getPrice();
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(itemReq.quantity()));
@@ -418,8 +422,7 @@ public class OrderService {
     private void deductStock(Order order) {
         for (OrderItem item : order.getItems()) {
             if (item.getProductId() != null) {
-                productService.deductStock(
-                        item.getProductId(), order.getRestaurantId(), item.getQuantity(), order.getId());
+                productService.deductForOrder(item.getProductId(), order.getRestaurantId(), item.getQuantity(), order.getId());
             }
         }
     }
@@ -429,8 +432,7 @@ public class OrderService {
         for (OrderItem item : order.getItems()) {
             if (item.getProductId() != null) {
                 try {
-                    productService.restoreStock(
-                            item.getProductId(), order.getRestaurantId(), item.getQuantity(), order.getId());
+                    productService.restoreForOrder(item.getProductId(), order.getRestaurantId(), item.getQuantity(), order.getId());
                 } catch (Exception e) {
                     log.error("No se pudo devolver stock del pedido id={} producto={}: {}",
                             order.getId(), item.getProductId(), e.getMessage());
@@ -473,4 +475,5 @@ public class OrderService {
         return (clean + "ORD").substring(0, 4);
     }
 }
+
 

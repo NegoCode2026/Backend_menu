@@ -1,6 +1,8 @@
 package com.menusaas.products;
 
 import com.menusaas.categories.repository.CategoryRepository;
+import com.menusaas.inventory.repository.IngredientRepository;
+import com.menusaas.inventory.repository.RecipeItemRepository;
 import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.products.dto.ProductRequest;
 import com.menusaas.products.entity.Product;
@@ -38,11 +40,17 @@ class ProductServiceTest {
     @Mock
     private com.menusaas.inventory.service.InventoryService inventoryService;
 
+    @Mock
+    private IngredientRepository ingredientRepository;
+
+    @Mock
+    private RecipeItemRepository recipeItemRepository;
+
     private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryRepository, signedUrlService, inventoryService);
+        productService = new ProductService(productRepository, categoryRepository, signedUrlService, inventoryService, ingredientRepository, recipeItemRepository);
     }
 
     @Test

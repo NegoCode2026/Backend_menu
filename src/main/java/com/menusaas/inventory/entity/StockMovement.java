@@ -22,12 +22,15 @@ public class StockMovement {
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 
-    @Column(name = "product_id", nullable = false)
+    @Column(name = "product_id")
     private Long productId;
 
-    /** Negativo = salida, positivo = entrada. */
-    @Column(nullable = false)
-    private Integer quantity;
+    @Column(name = "ingredient_id")
+    private Long ingredientId;
+
+    /** Negativo = salida, positivo = entrada (con decimales para g/ml). */
+    @Column(nullable = false, precision = 12, scale = 2)
+    private java.math.BigDecimal quantity;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

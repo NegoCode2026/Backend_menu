@@ -1,7 +1,11 @@
 package com.menusaas.products.service;
 
 import com.menusaas.categories.repository.CategoryRepository;
+import com.menusaas.inventory.entity.Ingredient;
 import com.menusaas.inventory.entity.MovementReason;
+import com.menusaas.inventory.entity.RecipeItem;
+import com.menusaas.inventory.repository.IngredientRepository;
+import com.menusaas.inventory.repository.RecipeItemRepository;
 import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.products.dto.ProductRequest;
@@ -25,6 +29,8 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final SignedUrlService signedUrlService;
     private final InventoryService inventoryService;
+    private final IngredientRepository ingredientRepository;
+    private final RecipeItemRepository recipeItemRepository;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> listMine(Long categoryId, Pageable pageable) {
@@ -177,14 +183,154 @@ public class ProductService {
 
     /** Alerta: productos que rastrean stock y están en o bajo el umbral. */
     @Transactional(readOnly = true)
-    public java.util.List<ProductResponse> findLowStockMine() {
-        Long restaurantId = SecurityUtils.currentRestaurantId();
+    public java.util.List<ProductResponse> findLowStockMine() {        Long restaurantId = SecurityUtils.currentRestaurantId();
         return productRepository.findByRestaurantIdOrderByPositionAsc(
                         restaurantId, org.springframework.data.domain.Pageable.unpaged())
                 .stream()
                 .filter(p -> p.isTrackStock() && p.getStockQuantity() <= p.getLowStockThreshold())
                 .map(this::toResponse)
                 .toList();
+    }
+
+    // ------------------------------------------------------------------
+    // Recetas: el plato descuenta ingredientes, no stock propio.
+    // ------------------------------------------------------------------
+
+    /**
+     * Reemplaza la receta del plato. Cada ingrediente debe ser del tenant.
+     * Lista vacía = quitar receta (vuelve a stock propio).
+     */
+    @Transactional
+    public java.util.List<RecipeItem> setRecipeMine(
+            Long productId, java.util.List<com.menusaas.inventory.dto.RecipeLineRequest> lines) {
+        Product product = findScoped(productId);
+        recipeItemRepository.deleteByProductId(productId);
+        if (lines == null || lines.isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.List<RecipeItem> saved = new java.util.ArrayList<>();
+        for (com.menusaas.inventory.dto.RecipeLineRequest line : lines) {
+            if (line.quantity() == null || line.quantity().signum() <= 0) {
+                throw new BadRequestException("La cantidad del ingrediente debe ser mayor a cero");
+            }
+            Ingredient ingredient = ingredientRepository
+                    .findByIdAndRestaurantId(line.ingredientId(), product.getRestaurantId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
+            saved.add(recipeItemRepository.save(RecipeItem.builder()
+                    .productId(productId)
+                    .ingredientId(ingredient.getId())
+                    .quantity(line.quantity())
+                    .build()));
+        }
+        return saved;
+    }
+
+    /**
+     * ¿Se puede vender esta cantidad? Con receta: todos los ingredientes
+     * alcanzan; sin receta: solo el flag disponible (el stock propio se
+     * valida al descontar).
+     */
+    @Transactional(readOnly = true)
+    public boolean canFulfill(Long productId, Long restaurantId, int quantity) {
+        Product product = getByIdAndRestaurantIdOrThrow(productId, restaurantId);
+        if (!product.isAvailable()) {
+            return false;
+        }
+        java.util.List<RecipeItem> recipe = recipeItemRepository.findByProductId(productId);
+        if (recipe.isEmpty()) {
+            return true;
+        }
+        for (RecipeItem line : recipe) {
+            Ingredient ingredient = ingredientRepository
+                    .findByIdAndRestaurantId(line.getIngredientId(), restaurantId)
+                    .orElse(null);
+            if (ingredient == null || !ingredient.isTrackStock()) {
+                continue;
+            }
+            java.math.BigDecimal need = line.getQuantity()
+                    .multiply(java.math.BigDecimal.valueOf(quantity));
+            if (ingredient.getStockQuantity().compareTo(need) < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Descuento por pedido: con receta descuenta ingredientes, sin receta
+     * usa el stock propio del producto.
+     */
+    @Transactional
+    public void deductForOrder(Long productId, Long restaurantId, int quantity, Long orderId) {
+        java.util.List<RecipeItem> recipe = recipeItemRepository.findByProductId(productId);
+        if (!recipe.isEmpty()) {
+            for (RecipeItem line : recipe) {
+                Ingredient ingredient = ingredientRepository
+                        .findByIdAndRestaurantId(line.getIngredientId(), restaurantId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
+                if (!ingredient.isTrackStock()) {
+                    continue;
+                }
+                java.math.BigDecimal need = line.getQuantity()
+                        .multiply(java.math.BigDecimal.valueOf(quantity));
+                if (ingredient.getStockQuantity().compareTo(need) < 0) {
+                    throw new BadRequestException("Sin ingredientes suficientes para '"
+                            + ingredient.getName() + "' (falta " + need.stripTrailingZeros().toPlainString()
+                            + " " + ingredient.getUnit() + ")");
+                }
+                ingredient.setStockQuantity(ingredient.getStockQuantity().subtract(need));
+                ingredientRepository.save(ingredient);
+                inventoryService.recordIngredient(restaurantId, ingredient.getId(),
+                        need.negate(), MovementReason.ORDER, orderId);
+            }
+            return;
+        }
+        Product product = getByIdAndRestaurantIdOrThrow(productId, restaurantId);
+        if (product.isTrackStock()) {
+            deductStock(product.getId(), restaurantId, quantity, orderId);
+        }
+    }
+
+    /** Devolución al cancelar: espejo de deductForOrder. */
+    @Transactional
+    public void restoreForOrder(Long productId, Long restaurantId, int quantity, Long orderId) {
+        java.util.List<RecipeItem> recipe = recipeItemRepository.findByProductId(productId);
+        if (!recipe.isEmpty()) {
+            for (RecipeItem line : recipe) {
+                Ingredient ingredient = ingredientRepository
+                        .findByIdAndRestaurantId(line.getIngredientId(), restaurantId)
+                        .orElse(null);
+                if (ingredient == null || !ingredient.isTrackStock()) {
+                    continue;
+                }
+                java.math.BigDecimal back = line.getQuantity()
+                        .multiply(java.math.BigDecimal.valueOf(quantity));
+                ingredient.setStockQuantity(ingredient.getStockQuantity().add(back));
+                ingredientRepository.save(ingredient);
+                inventoryService.recordIngredient(restaurantId, ingredient.getId(),
+                        back, MovementReason.CANCEL_RESTORE, orderId);
+            }
+            return;
+        }
+        Product product = getByIdAndRestaurantIdOrThrow(productId, restaurantId);
+        if (product.isTrackStock()) {
+            restoreStock(product.getId(), restaurantId, quantity, orderId);
+        }
+    }
+
+    /** Receta del plato con nombres (para el editor). */
+    @Transactional(readOnly = true)
+    public java.util.List<com.menusaas.inventory.dto.RecipeItemResponse> getRecipeMine(Long productId) {
+        findScoped(productId);
+        java.util.List<RecipeItem> lines = recipeItemRepository.findByProductId(productId);
+        java.util.List<com.menusaas.inventory.dto.RecipeItemResponse> out = new java.util.ArrayList<>();
+        for (RecipeItem line : lines) {
+            Ingredient ingredient = ingredientRepository.findById(line.getIngredientId()).orElse(null);
+            out.add(com.menusaas.inventory.dto.RecipeItemResponse.from(line,
+                    ingredient != null ? ingredient.getName() : "Ingrediente #" + line.getIngredientId(),
+                    ingredient != null ? ingredient.getUnit() : "und"));
+        }
+        return out;
     }
 
     private Product findScoped(Long id) {

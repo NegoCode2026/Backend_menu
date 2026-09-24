@@ -1,5 +1,7 @@
 package com.menusaas.products.controller;
 
+import com.menusaas.inventory.dto.RecipeItemResponse;
+import com.menusaas.inventory.dto.RecipeLineRequest;
 import com.menusaas.products.dto.ProductRequest;
 import com.menusaas.products.dto.ProductResponse;
 import com.menusaas.products.service.ProductService;
@@ -60,5 +62,22 @@ public class ProductController {
     public ApiResponse<Void> delete(@PathVariable Long id) {
         productService.deleteMine(id);
         return ApiResponse.ok("Producto eliminado");
+    }
+
+    @Operation(summary = "Ver receta del plato (ingredientes por unidad)")
+    @GetMapping("/{id}/recipe")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
+    public ApiResponse<java.util.List<RecipeItemResponse>> getRecipe(@PathVariable Long id) {
+        return ApiResponse.ok(productService.getRecipeMine(id));
+    }
+
+    @Operation(summary = "Reemplazar receta del plato (vacía = quitar receta)")
+    @PutMapping("/{id}/recipe")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
+    public ApiResponse<java.util.List<RecipeItemResponse>> setRecipe(
+            @PathVariable Long id,
+            @Valid @RequestBody java.util.List<RecipeLineRequest> lines) {
+        productService.setRecipeMine(id, lines);
+        return ApiResponse.ok("Receta actualizada", productService.getRecipeMine(id));
     }
 }
