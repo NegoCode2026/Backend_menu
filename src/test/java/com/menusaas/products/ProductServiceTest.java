@@ -8,6 +8,7 @@ import com.menusaas.products.repository.ProductRepository;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
+import com.menusaas.shared.security.SignedUrlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,25 +31,19 @@ class ProductServiceTest {
     private ProductRepository productRepository;
 
     @Mock
-    private CategoryRepository categoryRepository;
+    private CategoryService categoryService;
 
     @Mock
     private SignedUrlService signedUrlService;
 
     @Mock
-    private com.menusaas.inventory.service.InventoryService inventoryService;
-
-    @Mock
-    private IngredientRepository ingredientRepository;
-
-    @Mock
-    private RecipeItemRepository recipeItemRepository;
+    private InventoryService inventoryService;
 
     private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryRepository, signedUrlService, inventoryService, ingredientRepository, recipeItemRepository);
+        productService = new ProductService(productRepository, categoryService, signedUrlService, inventoryService);
     }
 
     @Test
@@ -57,7 +52,8 @@ class ProductServiceTest {
         // con categoryId del restaurante 1.
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(2L);
-            when(categoryRepository.existsByIdAndRestaurantId(999L, 2L)).thenReturn(false);
+            doThrow(new ResourceNotFoundException("Categoría no encontrada en este restaurante"))
+                    .when(categoryService).requireInRestaurant(999L, 2L);
 
             ProductRequest request = new ProductRequest(999L, "X", null, new BigDecimal("100"), null, true, 0,
                     null, null, null, null);
@@ -72,7 +68,6 @@ class ProductServiceTest {
     void create_persistsProductScopedToCurrentTenant() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(2L);
-            when(categoryRepository.existsByIdAndRestaurantId(7L, 2L)).thenReturn(true);
             when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
                 Product p = inv.getArgument(0);
                 p.setId(1L);
