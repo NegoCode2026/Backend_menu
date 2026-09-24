@@ -9,7 +9,7 @@ import com.menusaas.cash.service.CashService;
 import com.menusaas.orders.entity.Order;
 import com.menusaas.orders.entity.OrderStatus;
 import com.menusaas.orders.entity.PaymentMethod;
-import com.menusaas.orders.repository.OrderRepository;
+import com.menusaas.orders.service.OrderService;
 import com.menusaas.shared.security.SecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ import static org.mockito.Mockito.*;
 class CashServiceTest {
 
     @Mock
-    private OrderRepository orderRepository;
+    private OrderService orderService;
 
     @Mock
     private CashClosingRepository closingRepository;
@@ -41,7 +41,7 @@ class CashServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CashService(orderRepository, closingRepository);
+        service = new CashService(orderService, closingRepository);
     }
 
     private Order delivered(String total, PaymentMethod method) {
@@ -56,8 +56,8 @@ class CashServiceTest {
     void today_groupsByPaymentMethod() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
-                    eq(1L), eq(OrderStatus.DELIVERED), any(), any()))
+            when(orderService.findDeliveredBetween(
+                    eq(1L), any(), any()))
                     .thenReturn(List.of(
                             delivered("20000", PaymentMethod.CASH),
                             delivered("10000", PaymentMethod.CARD),
@@ -79,8 +79,8 @@ class CashServiceTest {
     void close_computesDifference() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
-                    eq(1L), eq(OrderStatus.DELIVERED), any(), any()))
+            when(orderService.findDeliveredBetween(
+                    eq(1L), any(), any()))
                     .thenReturn(List.of(delivered("20000", PaymentMethod.CASH)));
             when(closingRepository.findByRestaurantIdAndBusinessDate(eq(1L), any(LocalDate.class)))
                     .thenReturn(Optional.empty());

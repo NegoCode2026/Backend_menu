@@ -3,7 +3,7 @@ package com.menusaas.reports;
 import com.menusaas.orders.entity.Order;
 import com.menusaas.orders.entity.OrderItem;
 import com.menusaas.orders.entity.OrderStatus;
-import com.menusaas.orders.repository.OrderRepository;
+import com.menusaas.orders.service.OrderService;
 import com.menusaas.reports.dto.ProfitsResponse;
 import com.menusaas.reports.service.ProfitReportService;
 import com.menusaas.shared.security.SecurityUtils;
@@ -30,13 +30,13 @@ import static org.mockito.Mockito.*;
 class ProfitReportTest {
 
     @Mock
-    private OrderRepository orderRepository;
+    private OrderService orderService;
 
     private ProfitReportService service;
 
     @BeforeEach
     void setUp() {
-        service = new ProfitReportService(orderRepository);
+        service = new ProfitReportService(orderService);
     }
 
     private Order delivered(long id, LocalDate day, String total, String unitCost, int qty) throws Exception {
@@ -61,8 +61,8 @@ class ProfitReportTest {
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
-                    eq(1L), eq(OrderStatus.DELIVERED), any(Instant.class), any(Instant.class)))
+            when(orderService.findDeliveredBetween(
+                    eq(1L), any(Instant.class), any(Instant.class)))
                     .thenReturn(List.of(
                             delivered(1L, today, "20000", "8000", 2),
                             delivered(2L, today, "10000", "3000", 1)));
@@ -82,8 +82,8 @@ class ProfitReportTest {
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
-                    eq(1L), eq(OrderStatus.DELIVERED), any(Instant.class), any(Instant.class)))
+            when(orderService.findDeliveredBetween(
+                    eq(1L), any(Instant.class), any(Instant.class)))
                     .thenReturn(List.of(delivered(1L, today, "10000", "4000", 1)));
 
             ProfitsResponse r = service.getProfits("week", today);

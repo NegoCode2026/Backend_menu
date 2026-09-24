@@ -2,8 +2,7 @@ package com.menusaas.reports.service;
 
 import com.menusaas.orders.entity.Order;
 import com.menusaas.orders.entity.OrderItem;
-import com.menusaas.orders.entity.OrderStatus;
-import com.menusaas.orders.repository.OrderRepository;
+import com.menusaas.orders.service.OrderService;
 import com.menusaas.reports.dto.ProfitsResponse;
 import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.security.SecurityUtils;
@@ -29,7 +28,7 @@ import java.util.TreeMap;
 @RequiredArgsConstructor
 public class ProfitReportService {
 
-    private final OrderRepository orderRepository;
+    private final OrderService orderService;
 
     @Transactional(readOnly = true)
     public ProfitsResponse getProfits(String period, LocalDate date) {
@@ -59,8 +58,8 @@ public class ProfitReportService {
         Instant fromTs = from.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant toTs = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-        List<Order> orders = orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
-                restaurantId, OrderStatus.DELIVERED, fromTs, toTs);
+        List<Order> orders = orderService.findDeliveredBetween(
+                restaurantId, fromTs, toTs);
 
         Map<LocalDate, Acc> byDay = new TreeMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {

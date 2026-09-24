@@ -418,6 +418,20 @@ public class OrderService {
         order.setTotalAmount(subtotal.subtract(discount).add(tip));
     }
 
+    // ------------------------------------------------------------------
+    // Puerta de acceso para cash/reports: pedidos entregados por rango.
+    // Evita que otros módulos toquen OrderRepository directamente.
+    // ------------------------------------------------------------------
+
+    /**
+     * Pedidos ENTREGADOS de un restaurante entre dos instantes (para caja y reportes).
+     */
+    @Transactional(readOnly = true)
+    public List<Order> findDeliveredBetween(Long restaurantId, Instant from, Instant to) {
+        return orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
+                restaurantId, OrderStatus.DELIVERED, from, to);
+    }
+
     /** Descuento de inventario con orderId ya generado (misma transacción). */
     private void deductStock(Order order) {
         for (OrderItem item : order.getItems()) {

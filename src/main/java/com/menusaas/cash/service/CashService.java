@@ -6,9 +6,8 @@ import com.menusaas.cash.dto.CloseCashRequest;
 import com.menusaas.cash.entity.CashClosing;
 import com.menusaas.cash.repository.CashClosingRepository;
 import com.menusaas.orders.entity.Order;
-import com.menusaas.orders.entity.OrderStatus;
 import com.menusaas.orders.entity.PaymentMethod;
-import com.menusaas.orders.repository.OrderRepository;
+import com.menusaas.orders.service.OrderService;
 import com.menusaas.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,7 +29,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CashService {
 
-    private final OrderRepository orderRepository;
+    private final OrderService orderService;
     private final CashClosingRepository closingRepository;
 
     @Transactional(readOnly = true)
@@ -38,8 +37,8 @@ public class CashService {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         LocalDate date = LocalDate.now(ZoneOffset.UTC);
 
-        List<Order> delivered = orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
-                restaurantId, OrderStatus.DELIVERED,
+        List<Order> delivered = orderService.findDeliveredBetween(
+                restaurantId,
                 date.atStartOfDay(ZoneOffset.UTC).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant());
 
