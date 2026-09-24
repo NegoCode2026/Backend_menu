@@ -2,7 +2,7 @@ package com.menusaas.users.service;
 
 import com.menusaas.permissions.Permissions;
 import com.menusaas.permissions.service.PermissionService;
-import com.menusaas.restaurants.repository.RestaurantRepository;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
@@ -26,7 +26,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final RestaurantRepository restaurantRepository;
+    private final RestaurantService restaurantService;
     private final PasswordEncoder passwordEncoder;
     private final PermissionService permissions;
 
@@ -65,7 +65,7 @@ public class UserService {
                 .email(email)
                 .password(passwordEncoder.encode(request.password()))
                 .role(role)
-                .restaurant(restaurantRepository.getReferenceById(restaurantId))
+                .restaurant(restaurantService.getReferenceById(restaurantId))
                 .active(true)
                 .build();
         return UserResponse.from(userRepository.save(user));

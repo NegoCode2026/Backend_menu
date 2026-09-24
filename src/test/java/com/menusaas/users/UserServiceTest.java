@@ -4,7 +4,7 @@ import com.menusaas.auth.security.UserPrincipal;
 import com.menusaas.permissions.repository.RolePermissionRepository;
 import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.restaurants.entity.Restaurant;
-import com.menusaas.restaurants.repository.RestaurantRepository;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
@@ -48,7 +48,7 @@ class UserServiceTest {
     @Mock
     private RoleRepository roleRepository;
     @Mock
-    private RestaurantRepository restaurantRepository;
+    private RestaurantService restaurantService;
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
@@ -60,7 +60,7 @@ class UserServiceTest {
     void setUp() {
         // Servicio real: sin filas personalizadas valen los defaults por rol.
         PermissionService permissions = new PermissionService(rolePermissionRepository);
-        userService = new UserService(userRepository, roleRepository, restaurantRepository,
+        userService = new UserService(userRepository, roleRepository, restaurantService,
                 passwordEncoder, permissions);
         lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))
                 .thenReturn(List.of());
@@ -154,7 +154,7 @@ class UserServiceTest {
             when(roleRepository.findByName(Role.RESTAURANT_USER))
                     .thenReturn(Optional.of(new Role(null, Role.RESTAURANT_USER, null)));
             when(passwordEncoder.encode("StrongPass123!")).thenReturn("hash");
-            when(restaurantRepository.getReferenceById(1L))
+            when(restaurantService.getReferenceById(1L))
                     .thenReturn(Restaurant.builder().id(1L).build());
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 

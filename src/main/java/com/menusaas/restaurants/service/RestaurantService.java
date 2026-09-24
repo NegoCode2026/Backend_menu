@@ -99,6 +99,15 @@ public class RestaurantService {
         return restaurantRepository.findAllByActiveTrueOrderByNameAsc();
     }
 
+    /**
+     * Referencia JPA sin consulta (para asignar el tenant al crear entidades).
+     * Puerta de acceso para users: evita que otros módulos toquen RestaurantRepository.
+     */
+    @Transactional(readOnly = true)
+    public Restaurant getReferenceById(Long id) {
+        return restaurantRepository.getReferenceById(id);
+    }
+
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {
         String slug = request.slug().trim();
         if (!slug.equals(restaurant.getSlug()) && restaurantRepository.existsBySlug(slug)) {
