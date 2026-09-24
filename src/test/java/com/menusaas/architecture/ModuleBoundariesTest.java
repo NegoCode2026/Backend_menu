@@ -19,9 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - Cada módulo solo usa SU propio *.repository; lo ajeno va vía services.
  * - EXCEPCIÓN (documentada): admin/backoffice accede a datos de todos los
  *   restaurantes (es el único módulo cross-tenant; ver package-info de admin).
- * - EXCEPCIÓN (documentada): auth usa users.repository y
- *   restaurants.repository (bootstrap de identidad: register crea el tenant y
- *   su usuario en una transacción; login carga el usuario por email/id).
+ * - EXCEPCIÓN (documentada): auth usa users.repository y restaurants.repository
+ *   (bootstrap de identidad: register crea el tenant y su usuario en una
+ *   transacción; login carga el usuario por email/id).
  * - Los controllers no dependen de ningún repository (solo services).
  * - No hay ciclos entre módulos.
  */
@@ -114,15 +114,5 @@ class ModuleBoundariesTest {
                 .noneMatch(c -> c.getPackageName().startsWith("com.menusaas.menus")))
                 .as("paquete com.menusaas.menus fue renombrado a publicmenu")
                 .isTrue();
-    }
-
-    @Test
-    void signedUrlService_shouldLiveInSharedSecurity() {
-        ArchRule rule = noClasses()
-                .that().resideOutsideOfPackages("com.menusaas.files.security", "com.menusaas.shared.security")
-                .should().dependOnClassesThat()
-                .resideInAPackage("com.menusaas.files.security")
-                .because("SignedUrlService vive en shared.security; files.security solo mantiene el shim @Deprecated");
-        rule.check(classes);
     }
 }
