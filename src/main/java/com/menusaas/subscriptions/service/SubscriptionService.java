@@ -144,6 +144,26 @@ public class SubscriptionService {
     }
 
     /**
+     * Despacha un evento ya verificado de la pasarela hacia el caso de uso
+     * correspondiente. Evento nulo o tipo desconocido = sin operación.
+     */
+    @Transactional
+    public void applyGatewayEvent(PaymentGateway.PaymentEvent event) {
+        if (event == null) {
+            return;
+        }
+        switch (event.type()) {
+            case PaymentGateway.PaymentEvent.TYPE_CHECKOUT_COMPLETED ->
+                    activateFromGateway(
+                            event.restaurantId(), event.planCode(), event.providerReference(), event.periodEnd());
+            case PaymentGateway.PaymentEvent.TYPE_SUBSCRIPTION_CANCELLED ->
+                    cancelFromGateway(event.restaurantId(), event.providerReference());
+            default -> {
+            }
+        }
+    }
+
+    /**
      * Procesa la cancelación reportada por la pasarela (customer.subscription.deleted).
      */
     @Transactional
