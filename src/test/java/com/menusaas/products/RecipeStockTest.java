@@ -1,15 +1,13 @@
 package com.menusaas.products;
 
-import com.menusaas.categories.service.CategoryService;
 import com.menusaas.inventory.entity.Ingredient;
 import com.menusaas.inventory.entity.MovementReason;
 import com.menusaas.inventory.entity.RecipeItem;
 import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.repository.ProductRepository;
-import com.menusaas.products.service.ProductService;
+import com.menusaas.products.service.ProductRecipeService;
 import com.menusaas.shared.api.BadRequestException;
-import com.menusaas.shared.security.SignedUrlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,31 +20,22 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-/**
- * El plato con receta descuenta ingredientes, no stock propio.
- */
 @ExtendWith(MockitoExtension.class)
 class RecipeStockTest {
 
     @Mock
     private ProductRepository productRepository;
     @Mock
-    private CategoryService categoryService;
-    @Mock
-    private SignedUrlService signedUrlService;
-    @Mock
     private InventoryService inventoryService;
 
-    private ProductService productService;
+    private ProductRecipeService recipeService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryService,
-                signedUrlService, inventoryService);
+        recipeService = new ProductRecipeService(productRepository, inventoryService);
     }
 
     private Product dish(Long id) {
@@ -72,7 +61,7 @@ class RecipeStockTest {
         when(inventoryService.getIngredientOrThrow(10L, 1L))
                 .thenReturn(cheese(new BigDecimal("1000")));
 
-        productService.deductForOrder(1L, 1L, 2, 99L);
+        recipeService.deductForOrder(1L, 1L, 2, 99L);
 
         verify(inventoryService).saveIngredient(argThat(i ->
                 i.getStockQuantity().compareTo(new BigDecimal("800")) == 0));
@@ -88,7 +77,7 @@ class RecipeStockTest {
         when(inventoryService.getIngredientOrThrow(10L, 1L))
                 .thenReturn(cheese(new BigDecimal("50")));
 
-        assertThatThrownBy(() -> productService.deductForOrder(1L, 1L, 2, 99L))
+        assertThatThrownBy(() -> recipeService.deductForOrder(1L, 1L, 2, 99L))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Queso");
     }
@@ -101,7 +90,7 @@ class RecipeStockTest {
         when(inventoryService.findIngredientInRestaurant(10L, 1L))
                 .thenReturn(cheese(new BigDecimal("1000")));
 
-        assertThat(productService.canFulfill(1L, 1L, 5)).isTrue();
-        assertThat(productService.canFulfill(1L, 1L, 50)).isFalse();
+        assertThat(recipeService.canFulfill(1L, 1L, 5)).isTrue();
+        assertThat(recipeService.canFulfill(1L, 1L, 50)).isFalse();
     }
 }

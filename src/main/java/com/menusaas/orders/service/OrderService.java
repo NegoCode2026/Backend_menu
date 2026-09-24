@@ -1,7 +1,6 @@
 package com.menusaas.orders.service;
 
 import com.menusaas.orders.dto.CreateOrderRequest;
-import com.menusaas.orders.dto.OrderItemRequest;
 import com.menusaas.orders.dto.OrderResponse;
 import com.menusaas.orders.dto.OrderStatsResponse;
 import com.menusaas.orders.dto.UpdateOrderRequest;
@@ -39,10 +38,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -66,34 +63,7 @@ public class OrderService {
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final OrderEventPublisher orderEvents;
     private final PermissionService permissions;
-
-    /**
-     * Máquina de transiciones de estado. Los estados terminales (CANCELLED) y
-     * las transiciones fuera de esta lista se rechazan con un error 400.
-     */
-    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = new EnumMap<>(OrderStatus.class);
-
-    static {
-        ALLOWED_TRANSITIONS.put(OrderStatus.PENDING, Set.of(OrderStatus.CONFIRMED, OrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(OrderStatus.CONFIRMED, Set.of(OrderStatus.IN_PREPARATION, OrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(OrderStatus.IN_PREPARATION, Set.of(OrderStatus.READY, OrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(OrderStatus.READY, Set.of(OrderStatus.DELIVERED, OrderStatus.CANCELLED));
-    }
-
-    /**
-     * Qué permiso exige llevar un pedido a cada estado. El front limita
-     * botones; esto lo blinda en la API y es configurable por restaurante
-     * (ej. darle ORDER_KITCHEN a un mesero de confianza).
-     */
-    private static final Map<OrderStatus, String> STATUS_PERMISSIONS = new EnumMap<>(OrderStatus.class);
-
-    static {
-        STATUS_PERMISSIONS.put(OrderStatus.CONFIRMED, Permissions.ORDER_SERVE);
-        STATUS_PERMISSIONS.put(OrderStatus.IN_PREPARATION, Permissions.ORDER_KITCHEN);
-        STATUS_PERMISSIONS.put(OrderStatus.READY, Permissions.ORDER_KITCHEN);
-        STATUS_PERMISSIONS.put(OrderStatus.DELIVERED, Permissions.ORDER_SERVE);
-        STATUS_PERMISSIONS.put(OrderStatus.CANCELLED, Permissions.ORDER_CANCEL);
-    }
+    private final OrderPricing pricing;
 
     @Transactional
     public OrderResponse createPublicOrder(String slug, CreateOrderRequest request) {
@@ -121,7 +91,7 @@ public class OrderService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
-        applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
+        pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
         // Generación de consecutivo de pedido (ej. FMIX-0001)
         long count = orderRepository.countOrdersForRestaurant(restaurantId);
@@ -156,7 +126,7 @@ public class OrderService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
-        applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
+        pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
         long count = orderRepository.countOrdersForRestaurant(restaurantId);
         order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
@@ -202,7 +172,7 @@ public class OrderService {
             }
             // Los ítems cambian: se devuelve el stock anterior y se descuenta el nuevo.
             restoreStock(order);
-            applyItems(order, order.getRestaurantId(), request.items(), request.discountAmount(), request.tipAmount());
+            pricing.applyItems(order, order.getRestaurantId(), request.items(), request.discountAmount(), request.tipAmount());
         }
 
         Order updated = orderRepository.save(order);
@@ -282,13 +252,8 @@ public class OrderService {
         Order order = getMineOrder(id);
         OrderStatus current = order.getStatus();
 
-        if (current == OrderStatus.CANCELLED) {
-            throw new BadRequestException("No se puede modificar un pedido cancelado");
-        }
-        if (current != newStatus && !ALLOWED_TRANSITIONS.getOrDefault(current, Set.of()).contains(newStatus)) {
-            throw new BadRequestException("No se puede pasar el pedido de " + current + " a " + newStatus);
-        }
-        permissions.require(STATUS_PERMISSIONS.get(newStatus));
+        OrderStatusMachine.requireAllowed(current, newStatus);
+        permissions.require(OrderStatusMachine.permissionFor(newStatus));
 
         order.applyStatus(newStatus);
         Order updated = orderRepository.save(order);
@@ -350,72 +315,6 @@ public class OrderService {
         if (order.getStatus() == OrderStatus.DELIVERED) {
             throw new BadRequestException("No se puede editar un pedido que ya fue entregado");
         }
-    }
-
-    /**
-     * Valida productos del tenant, calcula totales y congela el costo
-     * unitario (snapshot para utilidades históricas).
-     * Total = subtotal ítems - descuento (tope: subtotal) + propina.
-     */
-    private void applyItems(Order order, Long restaurantId, List<OrderItemRequest> itemRequests,
-                            BigDecimal discountAmount, BigDecimal tipAmount) {
-        order.getItems().clear();
-        BigDecimal total = BigDecimal.ZERO;
-
-        for (OrderItemRequest itemReq : itemRequests) {
-            final Product product;
-            try {
-                product = productService.getByIdAndRestaurantIdOrThrow(itemReq.productId(), restaurantId);
-            } catch (ResourceNotFoundException e) {
-                // Contrato público: producto ajeno/inexistente es 400, no 404
-                // (el pedido aún no existe; es error del payload).
-                throw new BadRequestException("Producto no disponible en el menú: ID " + itemReq.productId());
-            }
-            if (!product.isAvailable()) {
-                throw new BadRequestException("El producto '" + product.getName() + "' no se encuentra disponible actualmente");
-            }
-            // Defensa extra: el producto debe pertenecer al tenant del pedido.
-            if (!restaurantId.equals(product.getRestaurantId())) {
-                throw new BadRequestException("Producto no disponible en el menú: ID " + itemReq.productId());
-            }
-            // Con receta se validan ingredientes; sin receta, el stock propio.
-            if (!productService.canFulfill(product.getId(), restaurantId, itemReq.quantity())) {
-                throw new BadRequestException("Sin existencias suficientes para '" + product.getName() + "'");
-            }
-
-            BigDecimal unitPrice = product.getPrice();
-            BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(itemReq.quantity()));
-            total = total.add(subtotal);
-
-            OrderItem item = OrderItem.builder()
-                    .productId(product.getId())
-                    .productName(product.getName())
-                    .unitPrice(unitPrice)
-                    .unitCost(product.getCostPrice() != null
-                            ? product.getCostPrice() : BigDecimal.ZERO)
-                    .quantity(itemReq.quantity())
-                    .subtotal(subtotal)
-                    .notes(itemReq.notes() != null ? itemReq.notes().trim() : null)
-                    .build();
-
-            order.addItem(item);
-        }
-
-        BigDecimal subtotal = total;
-        BigDecimal discount = discountAmount != null ? discountAmount : BigDecimal.ZERO;
-        if (discount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("El descuento no puede ser negativo");
-        }
-        if (discount.compareTo(subtotal) > 0) {
-            discount = subtotal;
-        }
-        BigDecimal tip = tipAmount != null ? tipAmount : BigDecimal.ZERO;
-        if (tip.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("La propina no puede ser negativa");
-        }
-        order.setDiscountAmount(discount);
-        order.setTipAmount(tip);
-        order.setTotalAmount(subtotal.subtract(discount).add(tip));
     }
 
     // ------------------------------------------------------------------
