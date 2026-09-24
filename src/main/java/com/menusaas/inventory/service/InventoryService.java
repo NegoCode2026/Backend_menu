@@ -93,6 +93,7 @@ public class InventoryService {
                 .unit(request.unit() != null && !request.unit().isBlank() ? request.unit().trim() : "und")
                 .stockQuantity(request.stockQuantity() != null ? request.stockQuantity() : BigDecimal.ZERO)
                 .lowStockThreshold(request.lowStockThreshold() != null ? request.lowStockThreshold() : new BigDecimal("5"))
+                .unitCost(request.unitCost() != null ? request.unitCost() : BigDecimal.ZERO)
                 .trackStock(request.trackStock() == null || request.trackStock())
                 .build();
         return IngredientResponse.from(ingredientRepository.save(ingredient));
@@ -105,6 +106,7 @@ public class InventoryService {
         if (request.unit() != null && !request.unit().isBlank()) ingredient.setUnit(request.unit().trim());
         if (request.stockQuantity() != null) ingredient.setStockQuantity(request.stockQuantity());
         if (request.lowStockThreshold() != null) ingredient.setLowStockThreshold(request.lowStockThreshold());
+        if (request.unitCost() != null) ingredient.setUnitCost(request.unitCost());
         if (request.trackStock() != null) ingredient.setTrackStock(request.trackStock());
         return IngredientResponse.from(ingredientRepository.save(ingredient));
     }

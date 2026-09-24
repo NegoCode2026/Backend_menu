@@ -40,6 +40,11 @@ public class Ingredient {
     @Builder.Default
     private BigDecimal lowStockThreshold = new BigDecimal("5");
 
+    /** Precio de compra por unidad (para costear recetas). */
+    @Column(name = "unit_cost", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal unitCost = BigDecimal.ZERO;
+
     @Column(name = "track_stock", nullable = false)
     @Builder.Default
     private boolean trackStock = true;

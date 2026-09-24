@@ -20,6 +20,9 @@ public record IngredientRequest(
         @DecimalMin(value = "0.00", message = "El umbral no puede ser negativo")
         BigDecimal lowStockThreshold,
 
+        @DecimalMin(value = "0.00", message = "El costo no puede ser negativo")
+        BigDecimal unitCost,
+
         Boolean trackStock
 ) {
 }

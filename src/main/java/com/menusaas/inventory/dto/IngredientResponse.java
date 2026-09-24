@@ -11,6 +11,7 @@ public record IngredientResponse(
         String unit,
         BigDecimal stockQuantity,
         BigDecimal lowStockThreshold,
+        BigDecimal unitCost,
         boolean trackStock,
         boolean lowStock,
         Instant createdAt,
@@ -19,7 +20,7 @@ public record IngredientResponse(
     public static IngredientResponse from(Ingredient i) {
         return new IngredientResponse(
                 i.getId(), i.getName(), i.getUnit(), i.getStockQuantity(),
-                i.getLowStockThreshold(), i.isTrackStock(),
+                i.getLowStockThreshold(), i.getUnitCost(), i.isTrackStock(),
                 i.isTrackStock() && i.getStockQuantity().compareTo(i.getLowStockThreshold()) <= 0,
                 i.getCreatedAt(), i.getUpdatedAt()
         );
