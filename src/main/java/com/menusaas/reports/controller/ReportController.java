@@ -15,7 +15,7 @@ import java.time.LocalDate;
 @Tag(name = "Reports", description = "Ganancias por pedidos entregados (tenant-scoped)")
 @RestController
 @RequestMapping("/api/reports")
-@PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+@PreAuthorize("@permissions.has('REPORTS_VIEW')")
 @RequiredArgsConstructor
 public class ReportController {
 

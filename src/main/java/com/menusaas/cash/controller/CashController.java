@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Cash", description = "Cierre de caja diario (tenant-scoped)")
 @RestController
 @RequestMapping("/api/cash")
-@PreAuthorize("hasAnyRole('RESTAURANT_ADMIN','CASHIER')")
+@PreAuthorize("@permissions.has('CASH_CLOSE')")
 @RequiredArgsConstructor
 public class CashController {
 

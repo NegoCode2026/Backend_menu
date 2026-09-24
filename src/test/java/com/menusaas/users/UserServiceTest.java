@@ -1,6 +1,8 @@
 package com.menusaas.users;
 
 import com.menusaas.auth.security.UserPrincipal;
+import com.menusaas.permissions.repository.RolePermissionRepository;
+import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.repository.RestaurantRepository;
 import com.menusaas.shared.api.ConflictException;
@@ -16,7 +18,6 @@ import com.menusaas.users.repository.UserRepository;
 import com.menusaas.users.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,8 +51,20 @@ class UserServiceTest {
     private RestaurantRepository restaurantRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
-    @InjectMocks
+    @Mock
+    private RolePermissionRepository rolePermissionRepository;
+
     private UserService userService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        // Servicio real: sin filas personalizadas valen los defaults por rol.
+        PermissionService permissions = new PermissionService(rolePermissionRepository);
+        userService = new UserService(userRepository, roleRepository, restaurantRepository,
+                passwordEncoder, permissions);
+        lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))
+                .thenReturn(List.of());
+    }
 
     private static User user(long id, long restaurantId, String role, String email) {
         return User.builder().id(id).name("Usuario").email(email).active(true)
@@ -74,7 +88,6 @@ class UserServiceTest {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(userRepository.findByRestaurantId(1L, null))
                     .thenReturn(List.of(user(1, 1, Role.RESTAURANT_USER, "u1@rest.com")));
-
             List<UserResponse> users = userService.listMine();
 
             assertThat(users).hasSize(1);

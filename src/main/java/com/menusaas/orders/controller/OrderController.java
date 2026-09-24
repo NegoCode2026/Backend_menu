@@ -71,7 +71,7 @@ public class OrderController {
 
     @Operation(summary = "Cobrar un pedido entregado (método de pago)")
     @PostMapping("/{id}/pay")
-    @PreAuthorize("hasAnyRole('RESTAURANT_ADMIN','CASHIER')")
+    @PreAuthorize("@permissions.has('CASH_CHARGE')")
     public ApiResponse<OrderResponse> pay(@PathVariable Long id, @Valid @RequestBody PayOrderRequest request) {
         return ApiResponse.ok("Pedido cobrado", orderService.payMine(id, request.paymentMethod()));
     }

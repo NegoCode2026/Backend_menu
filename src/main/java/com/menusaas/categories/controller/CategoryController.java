@@ -41,21 +41,21 @@ public class CategoryController {
     @Operation(summary = "Crear categoría")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         return ApiResponse.ok("Categoría creada", categoryService.createMine(request));
     }
 
     @Operation(summary = "Actualizar categoría")
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<CategoryResponse> update(@PathVariable Long id, @Valid @RequestBody CategoryRequest request) {
         return ApiResponse.ok("Categoría actualizada", categoryService.updateMine(id, request));
     }
 
     @Operation(summary = "Eliminar categoría (y sus productos)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         categoryService.deleteMine(id);
         return ApiResponse.ok("Categoría eliminada");

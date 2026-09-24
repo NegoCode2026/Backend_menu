@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 @Tag(name = "QR", description = "Descarga del código QR del menú (restaurante autenticado)")
 @RestController
 @RequestMapping("/api/qr")
-@PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+@PreAuthorize("@permissions.has('SETTINGS_EDIT')")
 @RequiredArgsConstructor
 public class QrController {
 

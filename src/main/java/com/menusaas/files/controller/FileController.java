@@ -25,7 +25,7 @@ public class FileController {
     @Operation(summary = "Subir una imagen y obtener su URL firmada")
     @PostMapping("/upload")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<Map<String, String>> upload(@RequestParam("file") MultipartFile file) {
         String fileId = fileStorageService.store(file);
         return ApiResponse.ok("Imagen subida", Map.of(

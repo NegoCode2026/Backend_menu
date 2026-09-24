@@ -8,6 +8,8 @@ import com.menusaas.orders.repository.OrderRepository;
 import com.menusaas.orders.repository.OrderStatusHistoryRepository;
 import com.menusaas.orders.service.OrderService;
 import com.menusaas.orders.service.WhatsAppNotificationService;
+import com.menusaas.permissions.repository.RolePermissionRepository;
+import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.realtime.OrderEventPublisher;
 import com.menusaas.restaurants.entity.Restaurant;
@@ -24,6 +26,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,13 +53,19 @@ class OrdersRoleTest {
     private WhatsAppNotificationService whatsAppNotificationService;
     @Mock
     private OrderEventPublisher orderEvents;
+    @Mock
+    private RolePermissionRepository rolePermissionRepository;
 
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
+        PermissionService permissions = new PermissionService(rolePermissionRepository);
         orderService = new OrderService(orderRepository, historyRepository, restaurantService,
-                productService, whatsAppNotificationService, orderEvents);
+                productService, whatsAppNotificationService, orderEvents, permissions);
+        // Sin filas personalizadas: valen los defaults por rol.
+        lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))
+                .thenReturn(List.of());
     }
 
     private static UserPrincipal principal(String role) {

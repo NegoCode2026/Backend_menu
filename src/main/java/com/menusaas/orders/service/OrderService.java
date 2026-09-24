@@ -12,6 +12,8 @@ import com.menusaas.orders.entity.OrderStatusHistory;
 import com.menusaas.orders.entity.OrderType;
 import com.menusaas.orders.repository.OrderRepository;
 import com.menusaas.orders.repository.OrderStatusHistoryRepository;
+import com.menusaas.permissions.Permissions;
+import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.realtime.OrderEventPublisher;
@@ -63,6 +65,7 @@ public class OrderService {
     private final ProductService productService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final OrderEventPublisher orderEvents;
+    private final PermissionService permissions;
 
     /**
      * Máquina de transiciones de estado. Los estados terminales (CANCELLED) y
@@ -78,22 +81,18 @@ public class OrderService {
     }
 
     /**
-     * Quién puede llevar un pedido a cada estado. El front ya limita botones;
-     * esto lo blinda en la API (un mesero no puede cancelar ni mandar a cocina).
+     * Qué permiso exige llevar un pedido a cada estado. El front limita
+     * botones; esto lo blinda en la API y es configurable por restaurante
+     * (ej. darle ORDER_KITCHEN a un mesero de confianza).
      */
-    private static final Map<OrderStatus, Set<String>> ROLE_TRANSITIONS = new EnumMap<>(OrderStatus.class);
+    private static final Map<OrderStatus, String> STATUS_PERMISSIONS = new EnumMap<>(OrderStatus.class);
 
     static {
-        ROLE_TRANSITIONS.put(OrderStatus.CONFIRMED, Set.of(
-                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER, Role.WAITER, Role.CASHIER));
-        ROLE_TRANSITIONS.put(OrderStatus.IN_PREPARATION, Set.of(
-                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER));
-        ROLE_TRANSITIONS.put(OrderStatus.READY, Set.of(
-                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER));
-        ROLE_TRANSITIONS.put(OrderStatus.DELIVERED, Set.of(
-                Role.RESTAURANT_ADMIN, Role.RESTAURANT_USER, Role.WAITER, Role.CASHIER));
-        ROLE_TRANSITIONS.put(OrderStatus.CANCELLED, Set.of(
-                Role.RESTAURANT_ADMIN, Role.CASHIER));
+        STATUS_PERMISSIONS.put(OrderStatus.CONFIRMED, Permissions.ORDER_SERVE);
+        STATUS_PERMISSIONS.put(OrderStatus.IN_PREPARATION, Permissions.ORDER_KITCHEN);
+        STATUS_PERMISSIONS.put(OrderStatus.READY, Permissions.ORDER_KITCHEN);
+        STATUS_PERMISSIONS.put(OrderStatus.DELIVERED, Permissions.ORDER_SERVE);
+        STATUS_PERMISSIONS.put(OrderStatus.CANCELLED, Permissions.ORDER_CANCEL);
     }
 
     @Transactional
@@ -175,11 +174,7 @@ public class OrderService {
 
     @Transactional
     public OrderResponse updateMine(Long id, UpdateOrderRequest request) {
-        String role = SecurityUtils.currentUser().getRole();
-        if (!Role.RESTAURANT_ADMIN.equals(role) && !Role.RESTAURANT_USER.equals(role)
-                && !Role.CASHIER.equals(role)) {
-            throw new ForbiddenException("Tu rol no puede editar pedidos");
-        }
+        permissions.require(Permissions.ORDERS_EDIT);
         Order order = getMineOrder(id);
         guardEditable(order);
 
@@ -293,10 +288,7 @@ public class OrderService {
         if (current != newStatus && !ALLOWED_TRANSITIONS.getOrDefault(current, Set.of()).contains(newStatus)) {
             throw new BadRequestException("No se puede pasar el pedido de " + current + " a " + newStatus);
         }
-        String role = SecurityUtils.currentUser().getRole();
-        if (!ROLE_TRANSITIONS.getOrDefault(newStatus, Set.of()).contains(role)) {
-            throw new ForbiddenException("Tu rol no puede llevar un pedido a " + newStatus);
-        }
+        permissions.require(STATUS_PERMISSIONS.get(newStatus));
 
         order.applyStatus(newStatus);
         Order updated = orderRepository.save(order);
@@ -329,7 +321,7 @@ public class OrderService {
 
     /**
      * Cobra un pedido ENTREGADO: fija método de pago y momento del cobro.
-     * Solo caja y admin (el mesero entrega, no cobra).
+     * Permiso CASH_CHARGE (caja por defecto; asignable a otros roles).
      */
     @Transactional
     public OrderResponse payMine(Long id, com.menusaas.orders.entity.PaymentMethod paymentMethod) {
@@ -337,10 +329,7 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.DELIVERED) {
             throw new BadRequestException("Solo se puede cobrar un pedido entregado");
         }
-        String role = SecurityUtils.currentUser().getRole();
-        if (!Role.RESTAURANT_ADMIN.equals(role) && !Role.CASHIER.equals(role)) {
-            throw new ForbiddenException("Solo caja o administración puede cobrar pedidos");
-        }
+        permissions.require(Permissions.CASH_CHARGE);
         order.setPaymentMethod(paymentMethod);
         order.setPaidAt(java.time.Instant.now());
         Order updated = orderRepository.save(order);

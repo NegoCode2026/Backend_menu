@@ -42,21 +42,21 @@ public class ProductController {
     @Operation(summary = "Crear producto")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<ProductResponse> create(@Valid @RequestBody ProductRequest request) {
         return ApiResponse.ok("Producto creado", productService.createMine(request));
     }
 
     @Operation(summary = "Actualizar producto")
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<ProductResponse> update(@PathVariable Long id, @Valid @RequestBody ProductRequest request) {
         return ApiResponse.ok("Producto actualizado", productService.updateMine(id, request));
     }
 
     @Operation(summary = "Eliminar producto")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         productService.deleteMine(id);
         return ApiResponse.ok("Producto eliminado");

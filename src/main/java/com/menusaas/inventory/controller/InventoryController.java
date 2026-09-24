@@ -22,7 +22,7 @@ import java.util.List;
 @Tag(name = "Inventory", description = "Existencias, alertas y kardex (tenant-scoped)")
 @RestController
 @RequestMapping("/api/inventory")
-@PreAuthorize("hasRole('RESTAURANT_ADMIN')")
+@PreAuthorize("@permissions.has('INVENTORY_MANAGE')")
 @RequiredArgsConstructor
 public class InventoryController {
 
