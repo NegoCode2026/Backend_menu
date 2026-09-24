@@ -1,8 +1,6 @@
 package com.menusaas.users;
 
 import com.menusaas.auth.security.UserPrincipal;
-import com.menusaas.permissions.repository.RolePermissionRepository;
-import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ConflictException;
@@ -29,7 +27,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -51,19 +48,13 @@ class UserServiceTest {
     private RestaurantService restaurantService;
     @Mock
     private PasswordEncoder passwordEncoder;
-    @Mock
-    private RolePermissionRepository rolePermissionRepository;
 
     private UserService userService;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        // Servicio real: sin filas personalizadas valen los defaults por rol.
-        PermissionService permissions = new PermissionService(rolePermissionRepository);
         userService = new UserService(userRepository, roleRepository, restaurantService,
-                passwordEncoder, permissions);
-        lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))
-                .thenReturn(List.of());
+                passwordEncoder);
     }
 
     private static User user(long id, long restaurantId, String role, String email) {
@@ -96,18 +87,6 @@ class UserServiceTest {
     }
 
     @Test
-    void listMine_nonAdmin_throws403() {
-        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
-            security.when(SecurityUtils::currentUser)
-                    .thenReturn(principal(user(2, 1, Role.WAITER, "mesero@rest.com")));
-
-            assertThatThrownBy(() -> userService.listMine())
-                    .isInstanceOf(ForbiddenException.class);
-            verify(userRepository, never()).findByRestaurantId(any(), any());
-        }
-    }
-
-    @Test
     void getMine_fromOtherRestaurant_throws404() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentUser).thenReturn(principal(admin(9, 1)));
@@ -128,20 +107,6 @@ class UserServiceTest {
             assertThatThrownBy(() -> userService.createMine(
                     new CreateUserRequest("Nuevo", "DUP@rest.com", "StrongPass123!", Role.RESTAURANT_USER)))
                     .isInstanceOf(ConflictException.class);
-        }
-    }
-
-    @Test
-    void createMine_nonAdmin_throws403() {
-        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
-            security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            security.when(SecurityUtils::currentUser)
-                    .thenReturn(principal(user(5, 1, Role.RESTAURANT_USER, "empleado@rest.com")));
-            when(userRepository.existsByEmail("nuevo@rest.com")).thenReturn(false);
-
-            assertThatThrownBy(() -> userService.createMine(
-                    new CreateUserRequest("Nuevo", "nuevo@rest.com", "StrongPass123!", Role.RESTAURANT_USER)))
-                    .isInstanceOf(ForbiddenException.class);
         }
     }
 

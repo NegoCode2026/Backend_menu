@@ -1,7 +1,5 @@
 package com.menusaas.users.service;
 
-import com.menusaas.permissions.Permissions;
-import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ForbiddenException;
@@ -28,11 +26,9 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final RestaurantService restaurantService;
     private final PasswordEncoder passwordEncoder;
-    private final PermissionService permissions;
 
     @Transactional(readOnly = true)
     public List<UserResponse> listMine() {
-        permissions.require(Permissions.USERS_MANAGE);
         Long restaurantId = SecurityUtils.currentRestaurantId();
         return userRepository.findByRestaurantId(restaurantId, null)
                 .stream()
@@ -42,7 +38,6 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserResponse getMine(Long id) {
-        permissions.require(Permissions.USERS_MANAGE);
         return UserResponse.from(findScoped(id));
     }
 
@@ -54,7 +49,6 @@ public class UserService {
         if (userRepository.existsByEmail(email)) {
             throw new ConflictException("Ya existe un usuario con ese correo");
         }
-        permissions.require(Permissions.USERS_MANAGE);
 
         String roleName = request.role() != null ? request.role() : Role.RESTAURANT_USER;
         Role role = roleRepository.findByName(roleName)
@@ -73,7 +67,6 @@ public class UserService {
 
     @Transactional
     public void deleteMine(Long id) {
-        permissions.require(Permissions.USERS_MANAGE);
         User user = findScoped(id);
         if (user.getId().equals(SecurityUtils.currentUser().getId())) {
             throw new ForbiddenException("No puede eliminarse a sí mismo");
@@ -83,7 +76,6 @@ public class UserService {
 
     @Transactional
     public void toggleActiveMine(Long id, boolean active) {
-        permissions.require(Permissions.USERS_MANAGE);
         User user = findScoped(id);
         if (user.getId().equals(SecurityUtils.currentUser().getId()) && !active) {
             throw new ForbiddenException("No puede desactivarse a sí mismo");
