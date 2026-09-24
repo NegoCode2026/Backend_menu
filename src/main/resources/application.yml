@@ -3,6 +3,8 @@ spring:
     web:
       pageable:
         serialization-mode: VIA_DTO
+        # Tope global de page/size en todos los listados (anti-DoS).
+        max-page-size: 100
   application:
     name: menu-saas-backend
   datasource:

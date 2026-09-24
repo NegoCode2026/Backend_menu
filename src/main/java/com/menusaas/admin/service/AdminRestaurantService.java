@@ -84,7 +84,7 @@ public class AdminRestaurantService {
     /** Compat con callers antiguos: página grande sin filtros. */
     @Transactional(readOnly = true)
     public List<AdminRestaurantResponse> listRestaurants() {
-        return listRestaurants(null, null, Pageable.ofSize(200)).getContent();
+        return listRestaurants(null, null, Pageable.ofSize(100)).getContent();
     }
 
     @CacheEvict(value = "adminStats", allEntries = true)
