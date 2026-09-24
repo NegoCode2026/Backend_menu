@@ -4,7 +4,6 @@ import com.menusaas.categories.dto.CategoryRequest;
 import com.menusaas.categories.dto.CategoryResponse;
 import com.menusaas.categories.entity.Category;
 import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.products.service.ProductService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
@@ -14,12 +13,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Taxonomía del menú. No depende de products: al borrar una categoría los
+ * productos se eliminan por la FK {@code products.category_id ON DELETE CASCADE}.
+ */
 @Service
 @RequiredArgsConstructor
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
-    private final ProductService productService;
 
     @Transactional(readOnly = true)
     public Page<CategoryResponse> listMine(Pageable pageable) {

@@ -5,8 +5,10 @@ import com.menusaas.inventory.dto.IngredientResponse;
 import com.menusaas.inventory.dto.StockMovementResponse;
 import com.menusaas.inventory.entity.Ingredient;
 import com.menusaas.inventory.entity.MovementReason;
+import com.menusaas.inventory.entity.RecipeItem;
 import com.menusaas.inventory.entity.StockMovement;
 import com.menusaas.inventory.repository.IngredientRepository;
+import com.menusaas.inventory.repository.RecipeItemRepository;
 import com.menusaas.inventory.repository.StockMovementRepository;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
@@ -29,6 +31,7 @@ public class InventoryService {
 
     private final StockMovementRepository movementRepository;
     private final IngredientRepository ingredientRepository;
+    private final RecipeItemRepository recipeItemRepository;
 
     /** Registro interno de producto (llamado por ProductService en la misma transacción). */
     public StockMovement record(Long restaurantId, Long productId, int quantity,
@@ -129,5 +132,51 @@ public class InventoryService {
     private Ingredient findIngredientScoped(Long id) {
         return ingredientRepository.findByIdAndRestaurantId(id, SecurityUtils.currentRestaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
+    }
+
+    // ------------------------------------------------------------------
+    // Puerta de acceso para products: recetas e ingredientes por tenant.
+    // Evita que otros módulos toquen los repositories de inventory.
+    // ------------------------------------------------------------------
+
+    /**
+     * Ingrediente del tenant o 404 (también sirve para validar pertenencia).
+     */
+    @Transactional(readOnly = true)
+    public Ingredient getIngredientOrThrow(Long ingredientId, Long restaurantId) {
+        return ingredientRepository.findByIdAndRestaurantId(ingredientId, restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
+    }
+
+    /**
+     * Ingrediente del tenant o null (para lecturas tolerantes como el editor de recetas).
+     */
+    @Transactional(readOnly = true)
+    public Ingredient findIngredientInRestaurant(Long ingredientId, Long restaurantId) {
+        return ingredientRepository.findByIdAndRestaurantId(ingredientId, restaurantId).orElse(null);
+    }
+
+    @Transactional
+    public Ingredient saveIngredient(Ingredient ingredient) {
+        return ingredientRepository.save(ingredient);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<RecipeItem> findRecipeByProduct(Long productId) {
+        return recipeItemRepository.findByProductId(productId);
+    }
+
+    @Transactional
+    public RecipeItem saveRecipeItem(Long productId, Long ingredientId, java.math.BigDecimal quantity) {
+        return recipeItemRepository.save(RecipeItem.builder()
+                .productId(productId)
+                .ingredientId(ingredientId)
+                .quantity(quantity)
+                .build());
+    }
+
+    @Transactional
+    public void deleteRecipeByProduct(Long productId) {
+        recipeItemRepository.deleteByProductId(productId);
     }
 }

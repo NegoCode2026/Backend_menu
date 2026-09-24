@@ -1,11 +1,9 @@
 package com.menusaas.products.service;
 
-import com.menusaas.categories.repository.CategoryRepository;
+import com.menusaas.categories.service.CategoryService;
 import com.menusaas.inventory.entity.Ingredient;
 import com.menusaas.inventory.entity.MovementReason;
 import com.menusaas.inventory.entity.RecipeItem;
-import com.menusaas.inventory.repository.IngredientRepository;
-import com.menusaas.inventory.repository.RecipeItemRepository;
 import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.products.dto.ProductRequest;
@@ -26,11 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductService {
 
     private final ProductRepository productRepository;
-    private final CategoryRepository categoryRepository;
+    private final CategoryService categoryService;
     private final SignedUrlService signedUrlService;
     private final InventoryService inventoryService;
-    private final IngredientRepository ingredientRepository;
-    private final RecipeItemRepository recipeItemRepository;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> listMine(Long categoryId, Pageable pageable) {
@@ -204,7 +200,7 @@ public class ProductService {
     public java.util.List<RecipeItem> setRecipeMine(
             Long productId, java.util.List<com.menusaas.inventory.dto.RecipeLineRequest> lines) {
         Product product = findScoped(productId);
-        recipeItemRepository.deleteByProductId(productId);
+        inventoryService.deleteRecipeByProduct(productId);
         if (lines == null || lines.isEmpty()) {
             return java.util.List.of();
         }
@@ -213,14 +209,9 @@ public class ProductService {
             if (line.quantity() == null || line.quantity().signum() <= 0) {
                 throw new BadRequestException("La cantidad del ingrediente debe ser mayor a cero");
             }
-            Ingredient ingredient = ingredientRepository
-                    .findByIdAndRestaurantId(line.ingredientId(), product.getRestaurantId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
-            saved.add(recipeItemRepository.save(RecipeItem.builder()
-                    .productId(productId)
-                    .ingredientId(ingredient.getId())
-                    .quantity(line.quantity())
-                    .build()));
+            Ingredient ingredient = inventoryService.getIngredientOrThrow(
+                    line.ingredientId(), product.getRestaurantId());
+            saved.add(inventoryService.saveRecipeItem(productId, ingredient.getId(), line.quantity()));
         }
         return saved;
     }
@@ -236,14 +227,13 @@ public class ProductService {
         if (!product.isAvailable()) {
             return false;
         }
-        java.util.List<RecipeItem> recipe = recipeItemRepository.findByProductId(productId);
+        java.util.List<RecipeItem> recipe = inventoryService.findRecipeByProduct(productId);
         if (recipe.isEmpty()) {
             return true;
         }
         for (RecipeItem line : recipe) {
-            Ingredient ingredient = ingredientRepository
-                    .findByIdAndRestaurantId(line.getIngredientId(), restaurantId)
-                    .orElse(null);
+            Ingredient ingredient = inventoryService.findIngredientInRestaurant(
+                    line.getIngredientId(), restaurantId);
             if (ingredient == null || !ingredient.isTrackStock()) {
                 continue;
             }
@@ -262,12 +252,11 @@ public class ProductService {
      */
     @Transactional
     public void deductForOrder(Long productId, Long restaurantId, int quantity, Long orderId) {
-        java.util.List<RecipeItem> recipe = recipeItemRepository.findByProductId(productId);
+        java.util.List<RecipeItem> recipe = inventoryService.findRecipeByProduct(productId);
         if (!recipe.isEmpty()) {
             for (RecipeItem line : recipe) {
-                Ingredient ingredient = ingredientRepository
-                        .findByIdAndRestaurantId(line.getIngredientId(), restaurantId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Ingrediente no encontrado"));
+                Ingredient ingredient = inventoryService.getIngredientOrThrow(
+                        line.getIngredientId(), restaurantId);
                 if (!ingredient.isTrackStock()) {
                     continue;
                 }
@@ -279,7 +268,7 @@ public class ProductService {
                             + " " + ingredient.getUnit() + ")");
                 }
                 ingredient.setStockQuantity(ingredient.getStockQuantity().subtract(need));
-                ingredientRepository.save(ingredient);
+                inventoryService.saveIngredient(ingredient);
                 inventoryService.recordIngredient(restaurantId, ingredient.getId(),
                         need.negate(), MovementReason.ORDER, orderId);
             }
@@ -294,19 +283,18 @@ public class ProductService {
     /** Devolución al cancelar: espejo de deductForOrder. */
     @Transactional
     public void restoreForOrder(Long productId, Long restaurantId, int quantity, Long orderId) {
-        java.util.List<RecipeItem> recipe = recipeItemRepository.findByProductId(productId);
+        java.util.List<RecipeItem> recipe = inventoryService.findRecipeByProduct(productId);
         if (!recipe.isEmpty()) {
             for (RecipeItem line : recipe) {
-                Ingredient ingredient = ingredientRepository
-                        .findByIdAndRestaurantId(line.getIngredientId(), restaurantId)
-                        .orElse(null);
+                Ingredient ingredient = inventoryService.findIngredientInRestaurant(
+                        line.getIngredientId(), restaurantId);
                 if (ingredient == null || !ingredient.isTrackStock()) {
                     continue;
                 }
                 java.math.BigDecimal back = line.getQuantity()
                         .multiply(java.math.BigDecimal.valueOf(quantity));
                 ingredient.setStockQuantity(ingredient.getStockQuantity().add(back));
-                ingredientRepository.save(ingredient);
+                inventoryService.saveIngredient(ingredient);
                 inventoryService.recordIngredient(restaurantId, ingredient.getId(),
                         back, MovementReason.CANCEL_RESTORE, orderId);
             }
@@ -321,11 +309,12 @@ public class ProductService {
     /** Receta del plato con nombres (para el editor). */
     @Transactional(readOnly = true)
     public java.util.List<com.menusaas.inventory.dto.RecipeItemResponse> getRecipeMine(Long productId) {
-        findScoped(productId);
-        java.util.List<RecipeItem> lines = recipeItemRepository.findByProductId(productId);
+        Product product = findScoped(productId);
+        java.util.List<RecipeItem> lines = inventoryService.findRecipeByProduct(productId);
         java.util.List<com.menusaas.inventory.dto.RecipeItemResponse> out = new java.util.ArrayList<>();
         for (RecipeItem line : lines) {
-            Ingredient ingredient = ingredientRepository.findById(line.getIngredientId()).orElse(null);
+            Ingredient ingredient = inventoryService.findIngredientInRestaurant(
+                    line.getIngredientId(), product.getRestaurantId());
             out.add(com.menusaas.inventory.dto.RecipeItemResponse.from(line,
                     ingredient != null ? ingredient.getName() : "Ingrediente #" + line.getIngredientId(),
                     ingredient != null ? ingredient.getUnit() : "und"));
@@ -341,14 +330,13 @@ public class ProductService {
     /**
      * Si trae categoría, debe pertenecer al mismo tenant (evita mover
      * productos entre restaurantes mediante categoryId). Null = sin categoría.
+     * Se resuelve vía CategoryService para no tocar su repositorio.
      */
     private void validateCategoryBelongsToTenant(Long categoryId, Long restaurantId) {
         if (categoryId == null) {
             return;
         }
-        if (!categoryRepository.existsByIdAndRestaurantId(categoryId, restaurantId)) {
-            throw new ResourceNotFoundException("Categoría no encontrada en este restaurante");
-        }
+        categoryService.requireInRestaurant(categoryId, restaurantId);
     }
 
     private ProductResponse toResponse(Product p) {
