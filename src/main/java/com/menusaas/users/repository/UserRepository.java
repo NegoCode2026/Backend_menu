@@ -18,6 +18,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("""
             select u from User u
+            join fetch u.role
+            left join fetch u.restaurant
             where u.restaurant.id = :restaurantId
               and (:roleName is null or u.role.name = :roleName)
             order by u.name
@@ -28,6 +30,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("""
             select u from User u
+            join fetch u.role
+            left join fetch u.restaurant
             where (:role is null or :role = '' or u.role.name = :role)
               and (:active is null or u.active = :active)
               and (:search is null or :search = ''
