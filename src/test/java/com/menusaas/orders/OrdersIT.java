@@ -290,6 +290,19 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(afterData.get("unpaidDelivered").asLong()).isZero();
         assertThat(afterData.get("unpaidOrders")).isEmpty();
         assertThat(afterData.get("expectedCash").asDouble()).isEqualTo(24000.0);
+        // Historial de cobros: qué se cobró y por cuánto
+        JsonNode paidOrders = afterData.get("paidOrders");
+        assertThat(paidOrders).hasSize(1);
+        assertThat(paidOrders.get(0).get("id").asLong()).isEqualTo(orderId);
+        assertThat(paidOrders.get(0).get("paymentMethod").asText()).isEqualTo("CASH");
+        assertThat(paidOrders.get(0).get("paidAt").isNull()).isFalse();
+        assertThat(paidOrders.get(0).get("totalAmount").asDouble()).isEqualTo(24000.0);
+
+        // Notificar por WhatsApp (desactivado en tests → false, pero responde 200)
+        ResponseEntity<JsonNode> notified = rest.exchange("/api/orders/" + orderId + "/notify-whatsapp", HttpMethod.POST,
+                TestHttp.body(objectMapper, Map.of(), owner), JsonNode.class);
+        assertThat(notified.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(notified.getBody().get("data").asBoolean()).isFalse();
 
         // Un pedido que aún no se sirve no aparece pendiente de cobro
         ResponseEntity<JsonNode> kitchen = postPublicOrder("cash-flow-owner", Map.of(

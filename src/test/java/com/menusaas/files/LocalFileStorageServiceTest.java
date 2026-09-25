@@ -31,6 +31,25 @@ class LocalFileStorageServiceTest {
             (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01
     };
     private static final byte[] EXE_BYTES = {0x4D, 0x5A, 0x50, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    private static final byte[] GIF89A_BYTES = {
+            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    private static final byte[] GIF87A_BYTES = {
+            0x47, 0x49, 0x46, 0x38, 0x37, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    private static final byte[] GIF_BAD_BYTES = {
+            0x47, 0x49, 0x46, 0x38, 0x30, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    private static final byte[] WEBP_BYTES = {
+            0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50
+    };
+    private static final byte[] RIFF_NOT_WEBP_BYTES = {
+            0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x58, 0x58, 0x58, 0x58
+    };
+    private static final byte[] SHORT_BYTES = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    private static final byte[] UNKNOWN_BYTES = {
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
 
     @TempDir
     Path tempDir;
@@ -122,5 +141,107 @@ class LocalFileStorageServiceTest {
         String fileId = storage.store(file);
 
         assertThat(fileId).matches("[0-9a-f-]{36}\\.jpg");
+    }
+
+    @Test
+    void store_gif89aBytes_getsGifExtension() {
+        MockMultipartFile file = new MockMultipartFile("file", "anim", "image/gif", GIF89A_BYTES);
+
+        String fileId = storage.store(file);
+
+        assertThat(fileId).matches("[0-9a-f-]{36}\\.gif");
+        assertThat(storage.load(fileId).contentType()).isEqualTo("image/gif");
+    }
+
+    @Test
+    void store_gif87aBytes_isAccepted() {
+        MockMultipartFile file = new MockMultipartFile("file", "viejo.gif", "image/gif", GIF87A_BYTES);
+
+        String fileId = storage.store(file);
+
+        assertThat(fileId).endsWith(".gif");
+    }
+
+    @Test
+    void store_gifVariantBytes_rejected() {
+        MockMultipartFile file = new MockMultipartFile("file", "raro.gif", "image/gif", GIF_BAD_BYTES);
+
+        assertThatThrownBy(() -> storage.store(file))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void store_webpBytes_getsWebpExtension() {
+        MockMultipartFile file = new MockMultipartFile("file", "foto", "image/webp", WEBP_BYTES);
+
+        String fileId = storage.store(file);
+
+        assertThat(fileId).matches("[0-9a-f-]{36}\\.webp");
+        assertThat(storage.load(fileId).contentType()).isEqualTo("image/webp");
+    }
+
+    @Test
+    void store_riffWithoutWebpMarker_rejected() {
+        MockMultipartFile file = new MockMultipartFile("file", "audio.webp", "image/webp", RIFF_NOT_WEBP_BYTES);
+
+        assertThatThrownBy(() -> storage.store(file))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void store_shortBytes_rejected() {
+        MockMultipartFile file = new MockMultipartFile("file", "corto.png", "image/png", SHORT_BYTES);
+
+        assertThatThrownBy(() -> storage.store(file))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void store_unknownBytes_rejected() {
+        MockMultipartFile file = new MockMultipartFile("file", "raro.png", "image/png", UNKNOWN_BYTES);
+
+        assertThatThrownBy(() -> storage.store(file))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void storeDirect_roundtripAndInvalidIds() {
+        storage.storeDirect("directo.png", PNG_BYTES);
+        assertThat(storage.load("directo.png").content()).isEqualTo(PNG_BYTES);
+
+        // Ids inválidos se ignoran sin romper ni escribir fuera del directorio
+        storage.storeDirect(null, PNG_BYTES);
+        storage.storeDirect("mala/ruta!", PNG_BYTES);
+        storage.storeDirect("..", PNG_BYTES);
+        assertThat(Files.exists(tempDir.resolve("..").resolve("directo.png"))).isFalse();
+    }
+
+    @Test
+    void load_dotDotId_rejected() {
+        assertThatThrownBy(() -> storage.load(".."))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void resolvePath_validationsAndSuccess() {
+        assertThatThrownBy(() -> storage.resolvePath(null))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> storage.resolvePath("mala/ruta!"))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> storage.resolvePath(".."))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> storage.resolvePath("no-existe.png"))
+                .isInstanceOf(BadRequestException.class);
+
+        storage.storeDirect("real.png", PNG_BYTES);
+        assertThat(Files.exists(storage.resolvePath("real.png"))).isTrue();
+    }
+
+    @Test
+    void contentTypeForId_detectsByExtension() {
+        assertThat(storage.contentTypeForId("FOTO.PNG")).isEqualTo("image/png");
+        assertThat(storage.contentTypeForId("anim.gif")).isEqualTo("image/gif");
+        assertThat(storage.contentTypeForId("foto.webp")).isEqualTo("image/webp");
+        assertThat(storage.contentTypeForId("foto.jpg")).isEqualTo("image/jpeg");
     }
 }
