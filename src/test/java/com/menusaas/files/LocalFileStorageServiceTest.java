@@ -84,7 +84,10 @@ class LocalFileStorageServiceTest {
 
         assertThat(fileId).matches("[0-9a-f-]{36}\\.png");
         assertThat(tempDir.resolve(fileId).normalize().startsWith(tempDir.toAbsolutePath().normalize())).isTrue();
-        assertThat(Files.exists(Path.of("/etc/passwd"))).isTrue(); // no fue sobrescrito, obviamente
+        // El nombre original no se convirtió en ruta: no se creó nada fuera del
+        // directorio de subida (portable en Windows, donde no existe /etc/passwd).
+        assertThat(Files.exists(tempDir.resolve("../../etc/passwd.png"))).isFalse();
+        assertThat(Files.exists(Path.of("/etc/passwd.png"))).isFalse();
     }
 
     @Test

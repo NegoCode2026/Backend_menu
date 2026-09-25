@@ -6,6 +6,7 @@ import com.menusaas.inventory.repository.IngredientRepository;
 import com.menusaas.inventory.repository.StockMovementRepository;
 import com.menusaas.orders.repository.OrderRepository;
 import com.menusaas.permissions.repository.RolePermissionRepository;
+import com.menusaas.permissions.repository.UserPermissionRepository;
 import com.menusaas.products.repository.ProductRepository;
 import com.menusaas.subscriptions.repository.SubscriptionRepository;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -43,6 +44,7 @@ class TenantRepositoriesTest {
             StockMovementRepository.class,
             OrderRepository.class,
             RolePermissionRepository.class,
+            UserPermissionRepository.class,
             ProductRepository.class,
             SubscriptionRepository.class);
 

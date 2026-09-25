@@ -1,6 +1,6 @@
 package com.menusaas.orders.controller;
 
-import com.menusaas.orders.dto.CreateOrderRequest;
+import com.menusaas.orders.dto.CreateManualOrderRequest;
 import com.menusaas.orders.dto.OrderResponse;
 import com.menusaas.orders.dto.OrderStatsResponse;
 import com.menusaas.orders.dto.OrderStatusRequest;
@@ -44,10 +44,10 @@ public class OrderController {
         return ApiResponse.ok(orderService.statsMine());
     }
 
-    @Operation(summary = "Crear un pedido manualmente (teléfono o presencial)")
+    @Operation(summary = "Crear un pedido manualmente (teléfono o presencial; nombre opcional)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request) {
+    public ApiResponse<OrderResponse> create(@Valid @RequestBody CreateManualOrderRequest request) {
         return ApiResponse.ok("Pedido creado exitosamente", orderService.createMine(request));
     }
 

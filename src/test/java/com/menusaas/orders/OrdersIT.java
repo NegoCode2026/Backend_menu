@@ -233,6 +233,94 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(afterCancel.getStatusCode().value()).isEqualTo(400);
     }
 
+    /**
+     * Flujo de caja: un pedido ENTREGADO sin cobrar aparece en la lista de
+     * "Pendientes de cobro" (con sus platos); al registrar el pago deja de
+     * aparecer y suma al efectivo esperado del día.
+     */
+    @Test
+    void cashToday_listsUnpaidDeliveredOrders_andPaymentClosesThem() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Cash Flow Owner", "cash-flow-owner@test.com", "cash-flow-owner");
+
+        long productId = createProduct(owner, "Huevos con tostada", 12000);
+        ResponseEntity<JsonNode> created = rest.exchange("/api/orders", HttpMethod.POST,
+                TestHttp.body(objectMapper, Map.of(
+                        "tableNumber", "3",
+                        "orderType", "DINE_IN",
+                        "items", List.of(Map.of("productId", productId, "quantity", 2))
+                ), owner), JsonNode.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        long orderId = created.getBody().get("data").get("id").asLong();
+
+        // Se sirve a la mesa: PENDING → CONFIRMED → IN_PREPARATION → READY → DELIVERED
+        for (String status : List.of("CONFIRMED", "IN_PREPARATION", "READY", "DELIVERED")) {
+            ResponseEntity<JsonNode> step = rest.exchange("/api/orders/" + orderId + "/status", HttpMethod.PATCH,
+                    TestHttp.body(objectMapper, Map.of("status", status), owner), JsonNode.class);
+            assertThat(step.getStatusCode().is2xxSuccessful()).as("status=%s", status).isTrue();
+        }
+
+        // Caja: sigue sin cobrarse → lista con sus platos y no suma al esperado
+        ResponseEntity<JsonNode> today = rest.exchange("/api/cash/today", HttpMethod.GET,
+                owner.get(), JsonNode.class);
+        assertThat(today.getStatusCode().is2xxSuccessful()).isTrue();
+        JsonNode todayData = today.getBody().get("data");
+        assertThat(todayData.get("unpaidDelivered").asLong()).isEqualTo(1);
+        JsonNode unpaid = todayData.get("unpaidOrders");
+        assertThat(unpaid).hasSize(1);
+        assertThat(unpaid.get(0).get("id").asLong()).isEqualTo(orderId);
+        assertThat(unpaid.get(0).get("tableNumber").asText()).isEqualTo("3");
+        assertThat(unpaid.get(0).get("paymentMethod").isNull()).isTrue();
+        assertThat(unpaid.get(0).get("items")).hasSize(1);
+        assertThat(unpaid.get(0).get("items").get(0).get("productName").asText())
+                .isEqualTo("Huevos con tostada");
+        assertThat(todayData.get("expectedCash").asDouble()).isEqualTo(0.0);
+
+        // La mesa paga en efectivo → se registra el cobro
+        ResponseEntity<JsonNode> paid = rest.exchange("/api/orders/" + orderId + "/pay", HttpMethod.POST,
+                TestHttp.body(objectMapper, Map.of("paymentMethod", "CASH"), owner), JsonNode.class);
+        assertThat(paid.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(paid.getBody().get("data").get("paidAt").isNull()).isFalse();
+        assertThat(paid.getBody().get("data").get("paymentMethod").asText()).isEqualTo("CASH");
+
+        // Ya no está pendiente y el efectivo esperado del día lo incluye
+        ResponseEntity<JsonNode> after = rest.exchange("/api/cash/today", HttpMethod.GET,
+                owner.get(), JsonNode.class);
+        JsonNode afterData = after.getBody().get("data");
+        assertThat(afterData.get("unpaidDelivered").asLong()).isZero();
+        assertThat(afterData.get("unpaidOrders")).isEmpty();
+        assertThat(afterData.get("expectedCash").asDouble()).isEqualTo(24000.0);
+
+        // Un pedido que aún no se sirve no aparece pendiente de cobro
+        ResponseEntity<JsonNode> kitchen = postPublicOrder("cash-flow-owner", Map.of(
+                "customerName", "Cliente",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))
+        ));
+        assertThat(kitchen.getStatusCode().value()).isEqualTo(201);
+        ResponseEntity<JsonNode> third = rest.exchange("/api/cash/today", HttpMethod.GET,
+                owner.get(), JsonNode.class);
+        assertThat(third.getBody().get("data").get("unpaidDelivered").asLong()).isZero();
+        assertThat(third.getBody().get("data").get("unpaidOrders")).isEmpty();
+    }
+
+    @Test
+    void manualOrder_canUseTableWithoutCustomerName() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Manual Without Name", "manual-without-name@test.com", "manual-without-name");
+
+        long productId = createProduct(owner, "Arepa Para Mesa", 9000);
+        ResponseEntity<JsonNode> created = rest.exchange("/api/orders", HttpMethod.POST,
+                TestHttp.body(objectMapper, Map.of(
+                        "tableNumber", "12",
+                        "orderType", "DINE_IN",
+                        "items", List.of(Map.of("productId", productId, "quantity", 1))
+                ), owner), JsonNode.class);
+
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(created.getBody().get("data").get("tableNumber").asText()).isEqualTo("12");
+        assertThat(created.getBody().get("data").get("customerName").asText()).isEqualTo("12");
+    }
+
     @Test
     void tenantOrderManagement_createEditStatsAndTimeline() throws Exception {
         TestHttp.Session owner = TestHttp.register(rest, objectMapper,

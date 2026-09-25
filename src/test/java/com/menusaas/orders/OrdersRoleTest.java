@@ -10,6 +10,7 @@ import com.menusaas.orders.service.OrderPricing;
 import com.menusaas.orders.service.OrderService;
 import com.menusaas.orders.service.WhatsAppNotificationService;
 import com.menusaas.permissions.repository.RolePermissionRepository;
+import com.menusaas.permissions.repository.UserPermissionRepository;
 import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.orders.events.OrderEventPublisher;
@@ -19,6 +20,7 @@ import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.security.SecurityUtils;
 import com.menusaas.users.entity.Role;
 import com.menusaas.users.entity.User;
+import com.menusaas.users.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,17 +58,24 @@ class OrdersRoleTest {
     private OrderEventPublisher orderEvents;
     @Mock
     private RolePermissionRepository rolePermissionRepository;
+    @Mock
+    private UserPermissionRepository userPermissionRepository;
+    @Mock
+    private UserService userService;
 
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        PermissionService permissions = new PermissionService(rolePermissionRepository);
+        PermissionService permissions = new PermissionService(
+                rolePermissionRepository, userPermissionRepository, userService);
         orderService = new OrderService(orderRepository, historyRepository, restaurantService,
                 productService, whatsAppNotificationService, orderEvents, permissions,
                 new OrderPricing(productService));
-        // Sin filas personalizadas: valen los defaults por rol.
+        // Sin filas personalizadas: valen los defaults por rol y por persona.
         lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))
+                .thenReturn(List.of());
+        lenient().when(userPermissionRepository.findByRestaurantIdAndUserId(any(), any()))
                 .thenReturn(List.of());
     }
 

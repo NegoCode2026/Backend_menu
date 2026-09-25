@@ -46,18 +46,32 @@ public class CashService {
         BigDecimal card = BigDecimal.ZERO;
         BigDecimal transfer = BigDecimal.ZERO;
         long unpaid = 0;
+        java.util.List<com.menusaas.orders.dto.OrderResponse> unpaidOrders = new java.util.ArrayList<>();
+        java.util.List<com.menusaas.orders.dto.OrderResponse> paidOrders = new java.util.ArrayList<>();
         for (Order order : delivered) {
             BigDecimal total = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
             if (order.getPaymentMethod() == null) {
                 unpaid++;
+                unpaidOrders.add(com.menusaas.orders.dto.OrderResponse.from(order));
             } else if (order.getPaymentMethod() == PaymentMethod.CASH) {
                 cash = cash.add(total);
+                paidOrders.add(com.menusaas.orders.dto.OrderResponse.from(order));
             } else if (order.getPaymentMethod() == PaymentMethod.CARD) {
                 card = card.add(total);
+                paidOrders.add(com.menusaas.orders.dto.OrderResponse.from(order));
             } else {
                 transfer = transfer.add(total);
+                paidOrders.add(com.menusaas.orders.dto.OrderResponse.from(order));
             }
         }
+        // Lo más recién cobrado primero (paidAt; si falta, updatedAt).
+        paidOrders.sort((a, b) -> {
+            java.time.Instant pa = a.paidAt() != null ? a.paidAt() : a.updatedAt();
+            java.time.Instant pb = b.paidAt() != null ? b.paidAt() : b.updatedAt();
+            if (pa == null) return 1;
+            if (pb == null) return -1;
+            return pb.compareTo(pa);
+        });
 
         CashClosingResponse closing = closingRepository
                 .findByRestaurantIdAndBusinessDate(restaurantId, date)
@@ -65,7 +79,7 @@ public class CashService {
                 .orElse(null);
 
         return CashTodayResponse.from(date, cash, card, transfer,
-                delivered.size(), unpaid, closing);
+                delivered.size(), unpaid, unpaidOrders, paidOrders, closing);
     }
 
     @Transactional

@@ -71,6 +71,8 @@ class CashServiceTest {
             assertThat(r.expectedCard()).isEqualByComparingTo("10000");
             assertThat(r.expectedTotal()).isEqualByComparingTo("30000");
             assertThat(r.unpaidDelivered()).isEqualTo(1);
+            assertThat(r.paidOrders()).hasSize(2);
+            assertThat(r.unpaidOrders()).hasSize(1);
             assertThat(r.closing()).isNull();
         }
     }

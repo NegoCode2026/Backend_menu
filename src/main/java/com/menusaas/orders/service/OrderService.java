@@ -1,5 +1,6 @@
 package com.menusaas.orders.service;
 
+import com.menusaas.orders.dto.CreateManualOrderRequest;
 import com.menusaas.orders.dto.CreateOrderRequest;
 import com.menusaas.orders.dto.OrderResponse;
 import com.menusaas.orders.dto.OrderStatsResponse;
@@ -108,14 +109,30 @@ public class OrderService {
         return response;
     }
 
+    /** Compatibilidad para consumidores que ya usaban el DTO público. */
     @Transactional
     public OrderResponse createMine(CreateOrderRequest request) {
+        return createMine(new CreateManualOrderRequest(
+                request.customerName(),
+                request.customerPhone(),
+                request.tableNumber(),
+                request.deliveryAddress(),
+                request.notes(),
+                request.orderType(),
+                request.discountAmount(),
+                request.tipAmount(),
+                request.items()
+        ));
+    }
+
+    @Transactional
+    public OrderResponse createMine(CreateManualOrderRequest request) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         Restaurant restaurant = restaurantService.findByIdForUpdateOrThrow(restaurantId);
 
         Order order = Order.builder()
                 .restaurantId(restaurantId)
-                .customerName(request.customerName().trim())
+                .customerName(manualCustomerName(request))
                 .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
                 .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
                 .deliveryAddress(request.deliveryAddress() != null ? request.deliveryAddress().trim() : null)
@@ -140,6 +157,21 @@ public class OrderService {
         OrderResponse response = withHistory(saved);
         orderEvents.orderCreated(response);
         return response;
+    }
+
+    private String manualCustomerName(CreateManualOrderRequest request) {
+        String provided = request.customerName();
+        if (provided != null && !provided.trim().isEmpty()) {
+            return provided.trim();
+        }
+        if (request.orderType() == OrderType.DELIVERY) {
+            return "Domicilio";
+        }
+        String table = request.tableNumber();
+        if (table != null && !table.trim().isEmpty()) {
+            return table.trim();
+        }
+        return "Mostrador";
     }
 
     @Transactional
@@ -299,7 +331,11 @@ public class OrderService {
         order.setPaidAt(java.time.Instant.now());
         Order updated = orderRepository.save(order);
         log.info("Pedido cobrado: id={}, num={}, método={}", updated.getId(), updated.getOrderNumber(), paymentMethod);
-        return withHistory(updated);
+        OrderResponse response = withHistory(updated);
+        // El cobro también viaja por el canal en vivo: la caja y el equipo
+        // ven "cobrada" sin recargar (notificaciones opt-in del staff).
+        orderEvents.statusChanged(response);
+        return response;
     }
 
     private Order getMineOrder(Long id) {
