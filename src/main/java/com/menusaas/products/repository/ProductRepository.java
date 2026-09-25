@@ -22,6 +22,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByIdAndRestaurantId(Long id, Long restaurantId);
 
+    java.util.List<Product> findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(Long restaurantId);
+
     @Modifying
     @Query("delete from Product p where p.categoryId = :categoryId and p.restaurantId = :restaurantId")
     int deleteByCategoryIdAndRestaurantId(@Param("categoryId") Long categoryId, @Param("restaurantId") Long restaurantId);
@@ -38,4 +40,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                        @Param("onlyAvailable") boolean onlyAvailable);
 
     long countByRestaurantId(Long restaurantId);
+
+    /**
+     * Conteo de productos agrupado por restaurante (panel admin: evita N+1).
+     */
+    @Query("select p.restaurantId, count(p) from Product p where p.restaurantId in :ids group by p.restaurantId")
+    List<Object[]> countGroupedByRestaurantIds(@Param("ids") java.util.Collection<Long> ids);
 }

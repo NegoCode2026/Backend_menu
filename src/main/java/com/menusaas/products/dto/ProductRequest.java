@@ -1,6 +1,7 @@
 package com.menusaas.products.dto;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -8,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 public record ProductRequest(
-        @NotNull(message = "La categoría es obligatoria")
+        /** Categoría opcional: null = sin categoría. */
         Long categoryId,
 
         @NotBlank(message = "El nombre es obligatorio")
@@ -26,6 +27,21 @@ public record ProductRequest(
 
         Boolean available,
 
-        Integer position
+        Integer position,
+
+        /** Costo unitario para utilidades. Opcional, default 0. */
+        @DecimalMin(value = "0.00", message = "El costo no puede ser negativo")
+        BigDecimal costPrice,
+
+        /** Existencias iniciales/actuales. Opcional. */
+        @Min(value = 0, message = "El stock no puede ser negativo")
+        Integer stockQuantity,
+
+        /** Umbral de alerta de stock bajo. Opcional, default 5. */
+        @Min(value = 0, message = "El umbral no puede ser negativo")
+        Integer lowStockThreshold,
+
+        /** Si true, el pedido descuenta existencias y valida disponibilidad. */
+        Boolean trackStock
 ) {
 }

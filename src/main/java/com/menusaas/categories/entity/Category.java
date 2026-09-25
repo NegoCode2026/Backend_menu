@@ -18,7 +18,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "categories")
-public class Category {
+public class Category implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

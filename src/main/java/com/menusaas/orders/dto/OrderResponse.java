@@ -4,6 +4,7 @@ import com.menusaas.orders.entity.Order;
 import com.menusaas.orders.entity.OrderStatus;
 import com.menusaas.orders.entity.OrderStatusHistory;
 import com.menusaas.orders.entity.OrderType;
+import com.menusaas.orders.entity.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,6 +23,10 @@ public record OrderResponse(
         OrderStatus status,
         OrderType orderType,
         BigDecimal totalAmount,
+        BigDecimal discountAmount,
+        BigDecimal tipAmount,
+        PaymentMethod paymentMethod,
+        Instant paidAt,
         Instant readyAt,
         Instant deliveredAt,
         Instant createdAt,
@@ -47,6 +52,10 @@ public record OrderResponse(
                 order.getStatus(),
                 order.getOrderType(),
                 order.getTotalAmount(),
+                order.getDiscountAmount(),
+                order.getTipAmount(),
+                order.getPaymentMethod(),
+                order.getPaidAt(),
                 order.getReadyAt(),
                 order.getDeliveredAt(),
                 order.getCreatedAt(),

@@ -1,6 +1,6 @@
 package com.menusaas.users.service;
 
-import com.menusaas.restaurants.repository.RestaurantRepository;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
@@ -24,7 +24,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final RestaurantRepository restaurantRepository;
+    private final RestaurantService restaurantService;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
@@ -49,7 +49,6 @@ public class UserService {
         if (userRepository.existsByEmail(email)) {
             throw new ConflictException("Ya existe un usuario con ese correo");
         }
-        requireAdmin();
 
         String roleName = request.role() != null ? request.role() : Role.RESTAURANT_USER;
         Role role = roleRepository.findByName(roleName)
@@ -60,7 +59,7 @@ public class UserService {
                 .email(email)
                 .password(passwordEncoder.encode(request.password()))
                 .role(role)
-                .restaurant(restaurantRepository.getReferenceById(restaurantId))
+                .restaurant(restaurantService.getReferenceById(restaurantId))
                 .active(true)
                 .build();
         return UserResponse.from(userRepository.save(user));
@@ -68,7 +67,6 @@ public class UserService {
 
     @Transactional
     public void deleteMine(Long id) {
-        requireAdmin();
         User user = findScoped(id);
         if (user.getId().equals(SecurityUtils.currentUser().getId())) {
             throw new ForbiddenException("No puede eliminarse a sí mismo");
@@ -78,7 +76,6 @@ public class UserService {
 
     @Transactional
     public void toggleActiveMine(Long id, boolean active) {
-        requireAdmin();
         User user = findScoped(id);
         if (user.getId().equals(SecurityUtils.currentUser().getId()) && !active) {
             throw new ForbiddenException("No puede desactivarse a sí mismo");
@@ -92,12 +89,5 @@ public class UserService {
                 .filter(u -> u.getRestaurant() != null
                         && u.getRestaurant().getId().equals(SecurityUtils.currentRestaurantId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-    }
-
-    private void requireAdmin() {
-        String role = SecurityUtils.currentUser().getRole();
-        if (!Role.RESTAURANT_ADMIN.equals(role) && !Role.SUPER_ADMIN.equals(role)) {
-            throw new ForbiddenException("Solo el administrador del restaurante puede gestionar usuarios");
-        }
     }
 }

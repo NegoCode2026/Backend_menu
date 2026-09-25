@@ -1,7 +1,9 @@
 package com.menusaas.products.service;
 
-import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.categories.service.CategoryService;
+import com.menusaas.inventory.entity.MovementReason;
+import com.menusaas.inventory.service.InventoryService;
+import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.products.dto.ProductRequest;
 import com.menusaas.products.dto.ProductResponse;
 import com.menusaas.products.entity.Product;
@@ -19,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductService {
 
     private final ProductRepository productRepository;
-    private final CategoryRepository categoryRepository;
+    private final CategoryService categoryService;
     private final SignedUrlService signedUrlService;
+    private final InventoryService inventoryService;
+    private final ProductRecipeService recipeService;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> listMine(Long categoryId, Pageable pageable) {
@@ -50,6 +54,10 @@ public class ProductService {
                 .imageUrl(signedUrlService.toStoredValue(request.imageUrl()))
                 .available(request.available() == null || request.available())
                 .position(request.position() != null ? request.position() : 0)
+                .costPrice(request.costPrice() != null ? request.costPrice() : java.math.BigDecimal.ZERO)
+                .stockQuantity(request.stockQuantity() != null ? request.stockQuantity() : 0)
+                .lowStockThreshold(request.lowStockThreshold() != null ? request.lowStockThreshold() : 5)
+                .trackStock(request.trackStock() != null && request.trackStock())
                 .build();
         return toResponse(productRepository.save(product));
     }
@@ -66,6 +74,10 @@ public class ProductService {
         if (request.imageUrl() != null) product.setImageUrl(signedUrlService.toStoredValue(request.imageUrl()));
         if (request.available() != null) product.setAvailable(request.available());
         if (request.position() != null) product.setPosition(request.position());
+        if (request.costPrice() != null) product.setCostPrice(request.costPrice());
+        if (request.stockQuantity() != null) product.setStockQuantity(request.stockQuantity());
+        if (request.lowStockThreshold() != null) product.setLowStockThreshold(request.lowStockThreshold());
+        if (request.trackStock() != null) product.setTrackStock(request.trackStock());
         return toResponse(productRepository.save(product));
     }
 
@@ -75,26 +87,138 @@ public class ProductService {
         productRepository.delete(product);
     }
 
+    // ------------------------------------------------------------------
+    // Consultas explícitas por tenant (sin SecurityUtils).
+    // Puerta de acceso para orders/publicmenu/categories: evita que otros
+    // módulos toquen ProductRepository directamente.
+    // ------------------------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public Product getByIdAndRestaurantIdOrThrow(Long id, Long restaurantId) {
+        return productRepository.findByIdAndRestaurantId(id, restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<Product> findAvailableByCategory(Long categoryId, Long restaurantId) {
+        return productRepository.findByCategoryScoped(categoryId, restaurantId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<Product> findUncategorized(Long restaurantId) {
+        return productRepository.findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(restaurantId);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, Long> countAvailableGroupedByRestaurant() {
+        java.util.Map<Long, Long> counts = new java.util.HashMap<>();
+        for (Object[] row : productRepository.countAvailableGroupedByRestaurant()) {
+            counts.put((Long) row[0], (Long) row[1]);
+        }
+        return counts;
+    }
+
+    @Transactional(readOnly = true)
+    public long countByRestaurant(Long restaurantId) {
+        return productRepository.countByRestaurantId(restaurantId);
+    }
+
+    @Transactional
+    public int deleteByCategoryAndRestaurant(Long categoryId, Long restaurantId) {
+        return productRepository.deleteByCategoryIdAndRestaurantId(categoryId, restaurantId);
+    }
+
+    // ------------------------------------------------------------------
+    // Inventario y recetas: delegan en ProductRecipeService (misma API).
+    // ------------------------------------------------------------------
+
+    /** Descuenta existencias por un pedido (delega en recetas/stock). */
+    @Transactional
+    public Product deductStock(Long productId, Long restaurantId, int quantity, Long orderId) {
+        return recipeService.deductStock(productId, restaurantId, quantity, orderId);
+    }
+
+    /** Devuelve existencias al cancelar un pedido (solo si rastrea stock). */
+    @Transactional
+    public void restoreStock(Long productId, Long restaurantId, int quantity, Long orderId) {
+        recipeService.restoreStock(productId, restaurantId, quantity, orderId);
+    }
+
+    /** Ajuste manual a una existencia absoluta (reposición o conteo). */
+    @Transactional
+    public ProductResponse setStockMine(Long productId, int newQuantity, MovementReason reason) {
+        Product product = findScoped(productId);
+        int delta = newQuantity - product.getStockQuantity();
+        product.setStockQuantity(newQuantity);
+        Product saved = productRepository.save(product);
+        inventoryService.record(product.getRestaurantId(), productId, delta, reason, null);
+        return toResponse(saved);
+    }
+
+    /** Alerta: productos que rastrean stock y están en o bajo el umbral. */
+    @Transactional(readOnly = true)
+    public java.util.List<ProductResponse> findLowStockMine() {        Long restaurantId = SecurityUtils.currentRestaurantId();
+        return productRepository.findByRestaurantIdOrderByPositionAsc(
+                        restaurantId, org.springframework.data.domain.Pageable.unpaged())
+                .stream()
+                .filter(p -> p.isTrackStock() && p.getStockQuantity() <= p.getLowStockThreshold())
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // ------------------------------------------------------------------
+    // Recetas: delegan en ProductRecipeService (misma API pública).
+    // ------------------------------------------------------------------
+
+    /** Reemplaza la receta del plato (lista vacía = quitar receta). */
+    @Transactional
+    public java.util.List<com.menusaas.inventory.entity.RecipeItem> setRecipeMine(
+            Long productId, java.util.List<com.menusaas.inventory.dto.RecipeLineRequest> lines) {
+        return recipeService.setRecipeMine(productId, lines);
+    }
+
+    /** ¿Se puede vender esta cantidad? (con o sin receta). */
+    @Transactional(readOnly = true)
+    public boolean canFulfill(Long productId, Long restaurantId, int quantity) {
+        return recipeService.canFulfill(productId, restaurantId, quantity);
+    }
+
+    /** Descuento por pedido: con receta descuenta ingredientes, sin receta stock propio. */
+    @Transactional
+    public void deductForOrder(Long productId, Long restaurantId, int quantity, Long orderId) {
+        recipeService.deductForOrder(productId, restaurantId, quantity, orderId);
+    }
+
+    /** Devolución al cancelar: espejo de deductForOrder. */
+    @Transactional
+    public void restoreForOrder(Long productId, Long restaurantId, int quantity, Long orderId) {
+        recipeService.restoreForOrder(productId, restaurantId, quantity, orderId);
+    }
+
+    /** Receta del plato con nombres (para el editor). */
+    @Transactional(readOnly = true)
+    public java.util.List<com.menusaas.inventory.dto.RecipeItemResponse> getRecipeMine(Long productId) {
+        return recipeService.getRecipeMine(productId);
+    }
+
     private Product findScoped(Long id) {
         return productRepository.findByIdAndRestaurantId(id, SecurityUtils.currentRestaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
     }
 
     /**
-     * La categoría debe pertenecer al mismo tenant, de lo contrario se rechaza
-     * (evita mover productos entre restaurantes mediante categoryId).
+     * Si trae categoría, debe pertenecer al mismo tenant (evita mover
+     * productos entre restaurantes mediante categoryId). Null = sin categoría.
+     * Se resuelve vía CategoryService para no tocar su repositorio.
      */
     private void validateCategoryBelongsToTenant(Long categoryId, Long restaurantId) {
-        if (!categoryRepository.existsByIdAndRestaurantId(categoryId, restaurantId)) {
-            throw new ResourceNotFoundException("Categoría no encontrada en este restaurante");
+        if (categoryId == null) {
+            return;
         }
+        categoryService.requireInRestaurant(categoryId, restaurantId);
     }
 
     private ProductResponse toResponse(Product p) {
-        return new ProductResponse(
-                p.getId(), p.getRestaurantId(), p.getCategoryId(), p.getName(), p.getDescription(),
-                p.getPrice(), signedUrlService.toSignedUrlOrNull(p.getImageUrl()), p.isAvailable(), p.getPosition(),
-                p.getCreatedAt(), p.getUpdatedAt()
-        );
+        return ProductResponse.from(p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()));
     }
 }

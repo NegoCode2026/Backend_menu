@@ -1,13 +1,15 @@
 package com.menusaas.products;
 
-import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.categories.service.CategoryService;
+import com.menusaas.inventory.service.InventoryService;
+import com.menusaas.products.service.ProductRecipeService;
 import com.menusaas.products.dto.ProductRequest;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.repository.ProductRepository;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
+import com.menusaas.shared.security.SignedUrlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,16 +32,22 @@ class ProductServiceTest {
     private ProductRepository productRepository;
 
     @Mock
-    private CategoryRepository categoryRepository;
+    private CategoryService categoryService;
 
     @Mock
     private SignedUrlService signedUrlService;
+
+    @Mock
+    private InventoryService inventoryService;
+
+    @Mock
+    private ProductRecipeService recipeService;
 
     private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryRepository, signedUrlService);
+        productService = new ProductService(productRepository, categoryService, signedUrlService, inventoryService, recipeService);
     }
 
     @Test
@@ -48,9 +56,11 @@ class ProductServiceTest {
         // con categoryId del restaurante 1.
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(2L);
-            when(categoryRepository.existsByIdAndRestaurantId(999L, 2L)).thenReturn(false);
+            doThrow(new ResourceNotFoundException("Categoría no encontrada en este restaurante"))
+                    .when(categoryService).requireInRestaurant(999L, 2L);
 
-            ProductRequest request = new ProductRequest(999L, "X", null, new BigDecimal("100"), null, true, 0);
+            ProductRequest request = new ProductRequest(999L, "X", null, new BigDecimal("100"), null, true, 0,
+                    null, null, null, null);
 
             assertThatThrownBy(() -> productService.createMine(request))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -62,7 +72,6 @@ class ProductServiceTest {
     void create_persistsProductScopedToCurrentTenant() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(2L);
-            when(categoryRepository.existsByIdAndRestaurantId(7L, 2L)).thenReturn(true);
             when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
                 Product p = inv.getArgument(0);
                 p.setId(1L);
@@ -70,7 +79,7 @@ class ProductServiceTest {
             });
 
             ProductRequest request = new ProductRequest(7L, "Hamburguesa", "Deliciosa",
-                    new BigDecimal("18000.00"), null, true, 1);
+                    new BigDecimal("18000.00"), null, true, 1, null, null, null, null);
 
             var response = productService.createMine(request);
 
@@ -88,7 +97,8 @@ class ProductServiceTest {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(productRepository.findByIdAndRestaurantId(5L, 1L)).thenReturn(Optional.empty());
 
-            ProductRequest request = new ProductRequest(1L, "Y", null, new BigDecimal("1"), null, true, 0);
+            ProductRequest request = new ProductRequest(1L, "Y", null, new BigDecimal("1"), null, true, 0,
+                    null, null, null, null);
 
             assertThatThrownBy(() -> productService.updateMine(5L, request))
                     .isInstanceOf(ResourceNotFoundException.class);

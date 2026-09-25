@@ -8,4 +8,8 @@ public record AuthResponse(UserInfo user) {
 
     public record UserInfo(Long id, String name, String email, String role, Long restaurantId) {
     }
+
+    public static AuthResponse from(UserInfo user) {
+        return new AuthResponse(user);
+    }
 }

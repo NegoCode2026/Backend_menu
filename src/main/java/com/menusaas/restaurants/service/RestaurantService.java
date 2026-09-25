@@ -1,6 +1,6 @@
 package com.menusaas.restaurants.service;
 
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.restaurants.dto.RestaurantRequest;
 import com.menusaas.restaurants.dto.RestaurantResponse;
 import com.menusaas.restaurants.entity.Restaurant;
@@ -66,6 +66,59 @@ public class RestaurantService {
         restaurantRepository.save(restaurant);
     }
 
+    // ------------------------------------------------------------------
+    // Consultas explícitas por tenant (sin SecurityUtils).
+    // Puerta de acceso para orders/publicmenu: evita que otros módulos
+    // toquen RestaurantRepository directamente.
+    // ------------------------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public Restaurant findActiveBySlugOrThrow(String slug) {
+        String normalized = slug == null ? "" : slug.trim().toLowerCase();
+        return restaurantRepository.findBySlug(normalized)
+                .filter(Restaurant::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Menú no encontrado"));
+    }
+
+    @Transactional
+    public Restaurant findActiveBySlugForUpdateOrThrow(String slug) {
+        String normalized = slug == null ? "" : slug.trim().toLowerCase();
+        return restaurantRepository.findBySlugForUpdate(normalized)
+                .filter(Restaurant::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("El menú digital no existe o no está disponible"));
+    }
+
+    @Transactional
+    public Restaurant findByIdForUpdateOrThrow(Long id) {
+        return restaurantRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<Restaurant> findAllActiveOrderedByName() {
+        return restaurantRepository.findAllByActiveTrueOrderByNameAsc();
+    }
+
+    /**
+     * Referencia JPA sin consulta (para asignar el tenant al crear entidades).
+     * Puerta de acceso para users: evita que otros módulos toquen RestaurantRepository.
+     */
+    @Transactional(readOnly = true)
+    public Restaurant getReferenceById(Long id) {
+        return restaurantRepository.getReferenceById(id);
+    }
+
+    /**
+     * Slug del restaurante (para QR/URLs públicas del propio tenant).
+     * Puerta de acceso para qr: evita que los controllers toquen RestaurantRepository.
+     */
+    @Transactional(readOnly = true)
+    public String slugOrThrow(Long restaurantId) {
+        return restaurantRepository.findById(restaurantId)
+                .map(Restaurant::getSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+    }
+
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {
         String slug = request.slug().trim();
         if (!slug.equals(restaurant.getSlug()) && restaurantRepository.existsBySlug(slug)) {
@@ -103,10 +156,6 @@ public class RestaurantService {
     }
 
     private RestaurantResponse toResponse(Restaurant r) {
-        return new RestaurantResponse(
-                r.getId(), r.getName(), r.getSlug(), signedUrlService.toSignedUrlOrNull(r.getLogoUrl()), r.getDescription(),
-                r.getPhone(), r.getAddress(), r.getWhatsapp(), r.getInstagram(), r.getFacebook(),
-                r.isActive(), r.isOpen(), r.getCreatedAt(), r.getUpdatedAt()
-        );
+        return RestaurantResponse.from(r, signedUrlService.toSignedUrlOrNull(r.getLogoUrl()));
     }
 }

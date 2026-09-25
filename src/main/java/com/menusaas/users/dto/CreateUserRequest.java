@@ -23,8 +23,8 @@ public record CreateUserRequest(
         )
         String password,
 
-        @Pattern(regexp = "^(RESTAURANT_ADMIN|RESTAURANT_USER)$",
-                message = "El rol debe ser RESTAURANT_ADMIN o RESTAURANT_USER")
+        @Pattern(regexp = "^(RESTAURANT_ADMIN|RESTAURANT_USER|WAITER|CASHIER)$",
+                message = "El rol debe ser RESTAURANT_ADMIN, RESTAURANT_USER, WAITER o CASHIER")
         String role
 ) {
 }

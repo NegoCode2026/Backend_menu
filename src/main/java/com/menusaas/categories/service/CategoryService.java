@@ -4,7 +4,6 @@ import com.menusaas.categories.dto.CategoryRequest;
 import com.menusaas.categories.dto.CategoryResponse;
 import com.menusaas.categories.entity.Category;
 import com.menusaas.categories.repository.CategoryRepository;
-import com.menusaas.products.repository.ProductRepository;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
@@ -14,22 +13,25 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Taxonomía del menú. No depende de products: al borrar una categoría los
+ * productos se eliminan por la FK {@code products.category_id ON DELETE CASCADE}.
+ */
 @Service
 @RequiredArgsConstructor
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
-    private final ProductRepository productRepository;
 
     @Transactional(readOnly = true)
     public Page<CategoryResponse> listMine(Pageable pageable) {
         return categoryRepository.findByRestaurantIdOrderByPositionAsc(SecurityUtils.currentRestaurantId(), pageable)
-                .map(this::toResponse);
+                .map(CategoryResponse::from);
     }
 
     @Transactional(readOnly = true)
     public CategoryResponse getMine(Long id) {
-        return toResponse(findScoped(id));
+        return CategoryResponse.from(findScoped(id));
     }
 
     @Transactional
@@ -45,7 +47,7 @@ public class CategoryService {
                 .position(request.position() != null ? request.position() : (int) categoryRepository.countByRestaurantId(restaurantId) + 1)
                 .active(request.active() == null || request.active())
                 .build();
-        return toResponse(categoryRepository.save(category));
+        return CategoryResponse.from(categoryRepository.save(category));
     }
 
     @Transactional
@@ -59,25 +61,48 @@ public class CategoryService {
         if (request.description() != null) category.setDescription(request.description());
         if (request.position() != null) category.setPosition(request.position());
         if (request.active() != null) category.setActive(request.active());
-        return toResponse(categoryRepository.save(category));
+        return CategoryResponse.from(categoryRepository.save(category));
     }
 
     @Transactional
     public void deleteMine(Long id) {
         Category category = findScoped(id);
-        productRepository.deleteByCategoryIdAndRestaurantId(category.getId(), category.getRestaurantId());
         categoryRepository.delete(category);
+    }
+
+    // ------------------------------------------------------------------
+    // Consultas explícitas por tenant (sin SecurityUtils) para publicmenu
+    // y products: evita que otros módulos toquen CategoryRepository.
+    // ------------------------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public java.util.List<Category> findActiveByRestaurantId(Long restaurantId) {
+        return categoryRepository.findAllByRestaurantIdOrderByPositionAsc(restaurantId)
+                .stream()
+                .filter(Category::isActive)
+                .toList();
+    }
+
+    /**
+     * ¿La categoría pertenece al restaurante? (para validar categoryId ajenos).
+     */
+    @Transactional(readOnly = true)
+    public boolean existsInRestaurant(Long categoryId, Long restaurantId) {
+        return categoryRepository.existsByIdAndRestaurantId(categoryId, restaurantId);
+    }
+
+    /**
+     * Exige pertenencia al tenant o 404 (misma respuesta que un id inexistente).
+     */
+    @Transactional(readOnly = true)
+    public void requireInRestaurant(Long categoryId, Long restaurantId) {
+        if (!existsInRestaurant(categoryId, restaurantId)) {
+            throw new ResourceNotFoundException("Categoría no encontrada en este restaurante");
+        }
     }
 
     private Category findScoped(Long id) {
         return categoryRepository.findByIdAndRestaurantId(id, SecurityUtils.currentRestaurantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada"));
-    }
-
-    private CategoryResponse toResponse(Category c) {
-        return new CategoryResponse(
-                c.getId(), c.getRestaurantId(), c.getName(), c.getDescription(),
-                c.getPosition(), c.isActive(), c.getCreatedAt(), c.getUpdatedAt()
-        );
     }
 }

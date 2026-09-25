@@ -19,7 +19,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "products")
-public class Product {
+public class Product implements com.menusaas.shared.tenancy.TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +28,7 @@ public class Product {
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 
-    @Column(name = "category_id", nullable = false)
+    @Column(name = "category_id")
     private Long categoryId;
 
     @Column(nullable = false, length = 160)
@@ -40,7 +40,27 @@ public class Product {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "image_url", columnDefinition = "text")
+    /** Costo unitario: base para utilidades (precio - costo). */
+    @Column(name = "cost_price", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal costPrice = BigDecimal.ZERO;
+
+    /** Existencias. Solo se descuentan si trackStock es true. */
+    @Column(name = "stock_quantity", nullable = false)
+    @Builder.Default
+    private int stockQuantity = 0;
+
+    /** Alerta cuando stock <= umbral. */
+    @Column(name = "low_stock_threshold", nullable = false)
+    @Builder.Default
+    private int lowStockThreshold = 5;
+
+    /** Si es false, el producto se vende sin control de existencias. */
+    @Column(name = "track_stock", nullable = false)
+    @Builder.Default
+    private boolean trackStock = false;
+
+    @Column(name = "image_url", length = 500)
     private String imageUrl;
 
     @Column(nullable = false)

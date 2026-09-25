@@ -2,8 +2,7 @@ package com.menusaas.qr.controller;
 
 import com.menusaas.config.AppProperties;
 import com.menusaas.qr.service.QrCodeService;
-import com.menusaas.restaurants.repository.RestaurantRepository;
-import com.menusaas.shared.api.ResourceNotFoundException;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +11,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,11 +26,12 @@ import java.util.concurrent.TimeUnit;
 @Tag(name = "QR", description = "Descarga del código QR del menú (restaurante autenticado)")
 @RestController
 @RequestMapping("/api/qr")
+@PreAuthorize("@permissions.has('SETTINGS_EDIT')")
 @RequiredArgsConstructor
 public class QrController {
 
     private final QrCodeService qrCodeService;
-    private final RestaurantRepository restaurantRepository;
+    private final RestaurantService restaurantService;
     private final AppProperties appProperties;
 
     @Operation(summary = "Descargar QR del menú en PNG")
@@ -67,9 +68,6 @@ public class QrController {
     }
 
     private String slugOfCurrentRestaurant() {
-        Long restaurantId = SecurityUtils.currentRestaurantId();
-        return restaurantRepository.findById(restaurantId)
-                .map(r -> r.getSlug())
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+        return restaurantService.slugOrThrow(SecurityUtils.currentRestaurantId());
     }
 }

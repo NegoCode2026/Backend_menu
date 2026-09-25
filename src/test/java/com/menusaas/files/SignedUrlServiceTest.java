@@ -1,7 +1,7 @@
 package com.menusaas.files;
 
 import com.menusaas.config.AppProperties;
-import com.menusaas.files.security.SignedUrlService;
+import com.menusaas.shared.security.SignedUrlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

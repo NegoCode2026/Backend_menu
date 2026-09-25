@@ -3,6 +3,8 @@ spring:
     web:
       pageable:
         serialization-mode: VIA_DTO
+        # Tope global de page/size en todos los listados (anti-DoS).
+        max-page-size: 100
   application:
     name: menu-saas-backend
   datasource:
@@ -44,6 +46,7 @@ app:
   upload-dir: ${UPLOAD_DIR:./uploads}
   security:
     cookies-secure: ${COOKIES_SECURE:false}
+    cookie-same-site: ${COOKIE_SAMESITE:Strict}
     signed-url-ttl-seconds: ${SIGNED_URL_TTL:3600}
     session-absolute-ttl-hours: ${SESSION_ABSOLUTE_TTL_HOURS:24}
   rate-limiting:

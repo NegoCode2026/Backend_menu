@@ -31,6 +31,11 @@ public class OrderItem {
     @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice;
 
+    /** Snapshot del costo al pedir: utilidades históricas inmutables. */
+    @Column(name = "unit_cost", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal unitCost = BigDecimal.ZERO;
+
     @Column(nullable = false)
     private Integer quantity;
 

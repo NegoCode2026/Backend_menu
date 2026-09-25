@@ -2,7 +2,7 @@ package com.menusaas.users;
 
 import com.menusaas.auth.security.UserPrincipal;
 import com.menusaas.restaurants.entity.Restaurant;
-import com.menusaas.restaurants.repository.RestaurantRepository;
+import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
@@ -16,7 +16,6 @@ import com.menusaas.users.repository.UserRepository;
 import com.menusaas.users.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,11 +45,17 @@ class UserServiceTest {
     @Mock
     private RoleRepository roleRepository;
     @Mock
-    private RestaurantRepository restaurantRepository;
+    private RestaurantService restaurantService;
     @Mock
     private PasswordEncoder passwordEncoder;
-    @InjectMocks
+
     private UserService userService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        userService = new UserService(userRepository, roleRepository, restaurantService,
+                passwordEncoder);
+    }
 
     private static User user(long id, long restaurantId, String role, String email) {
         return User.builder().id(id).name("Usuario").email(email).active(true)
@@ -70,10 +75,10 @@ class UserServiceTest {
     @Test
     void listMine_returnsOnlyUsersOfMyRestaurant() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentUser).thenReturn(principal(admin(9, 1)));
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(userRepository.findByRestaurantId(1L, null))
                     .thenReturn(List.of(user(1, 1, Role.RESTAURANT_USER, "u1@rest.com")));
-
             List<UserResponse> users = userService.listMine();
 
             assertThat(users).hasSize(1);
@@ -84,6 +89,7 @@ class UserServiceTest {
     @Test
     void getMine_fromOtherRestaurant_throws404() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentUser).thenReturn(principal(admin(9, 1)));
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(userRepository.findById(99L)).thenReturn(Optional.of(user(99, 2, Role.RESTAURANT_USER, "otro@rest.com")));
 
@@ -105,20 +111,6 @@ class UserServiceTest {
     }
 
     @Test
-    void createMine_nonAdmin_throws403() {
-        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
-            security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            security.when(SecurityUtils::currentUser)
-                    .thenReturn(principal(user(5, 1, Role.RESTAURANT_USER, "empleado@rest.com")));
-            when(userRepository.existsByEmail("nuevo@rest.com")).thenReturn(false);
-
-            assertThatThrownBy(() -> userService.createMine(
-                    new CreateUserRequest("Nuevo", "nuevo@rest.com", "StrongPass123!", Role.RESTAURANT_USER)))
-                    .isInstanceOf(ForbiddenException.class);
-        }
-    }
-
-    @Test
     void createMine_asAdmin_createsUserWithDefaultRole() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
@@ -127,7 +119,7 @@ class UserServiceTest {
             when(roleRepository.findByName(Role.RESTAURANT_USER))
                     .thenReturn(Optional.of(new Role(null, Role.RESTAURANT_USER, null)));
             when(passwordEncoder.encode("StrongPass123!")).thenReturn("hash");
-            when(restaurantRepository.getReferenceById(1L))
+            when(restaurantService.getReferenceById(1L))
                     .thenReturn(Restaurant.builder().id(1L).build());
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 

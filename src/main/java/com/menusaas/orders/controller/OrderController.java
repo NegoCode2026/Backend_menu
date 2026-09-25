@@ -1,9 +1,10 @@
 package com.menusaas.orders.controller;
 
-import com.menusaas.orders.dto.CreateOrderRequest;
+import com.menusaas.orders.dto.CreateManualOrderRequest;
 import com.menusaas.orders.dto.OrderResponse;
 import com.menusaas.orders.dto.OrderStatsResponse;
 import com.menusaas.orders.dto.OrderStatusRequest;
+import com.menusaas.orders.dto.PayOrderRequest;
 import com.menusaas.orders.dto.UpdateOrderRequest;
 import com.menusaas.orders.entity.OrderStatus;
 import com.menusaas.orders.service.OrderService;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -21,6 +23,7 @@ import java.util.List;
 @Tag(name = "Orders", description = "Gestión de pedidos del restaurante (tenant-scoped)")
 @RestController
 @RequestMapping("/api/orders")
+@PreAuthorize("hasAnyRole('RESTAURANT_ADMIN','RESTAURANT_USER','WAITER','CASHIER')")
 @RequiredArgsConstructor
 public class OrderController {
 
@@ -41,10 +44,10 @@ public class OrderController {
         return ApiResponse.ok(orderService.statsMine());
     }
 
-    @Operation(summary = "Crear un pedido manualmente (teléfono o presencial)")
+    @Operation(summary = "Crear un pedido manualmente (teléfono o presencial; nombre opcional)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request) {
+    public ApiResponse<OrderResponse> create(@Valid @RequestBody CreateManualOrderRequest request) {
         return ApiResponse.ok("Pedido creado exitosamente", orderService.createMine(request));
     }
 
@@ -64,6 +67,13 @@ public class OrderController {
     @PatchMapping("/{id}/status")
     public ApiResponse<OrderResponse> updateStatus(@PathVariable Long id, @Valid @RequestBody OrderStatusRequest request) {
         return ApiResponse.ok("Estado de pedido actualizado", orderService.updateStatusMine(id, request.status()));
+    }
+
+    @Operation(summary = "Cobrar un pedido entregado (método de pago)")
+    @PostMapping("/{id}/pay")
+    @PreAuthorize("@permissions.has('CASH_CHARGE')")
+    public ApiResponse<OrderResponse> pay(@PathVariable Long id, @Valid @RequestBody PayOrderRequest request) {
+        return ApiResponse.ok("Pedido cobrado", orderService.payMine(id, request.paymentMethod()));
     }
 
     @Operation(summary = "Enviar notificación de WhatsApp de 'Pedido listo' al cliente")

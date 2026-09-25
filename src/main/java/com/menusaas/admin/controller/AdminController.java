@@ -2,8 +2,10 @@ package com.menusaas.admin.controller;
 
 import com.menusaas.admin.dto.*;
 import com.menusaas.admin.entity.AuditLog;
-import com.menusaas.admin.repository.AuditLogRepository;
-import com.menusaas.admin.service.AdminService;
+import com.menusaas.admin.service.AdminRestaurantService;
+import com.menusaas.admin.service.AdminStatsService;
+import com.menusaas.admin.service.AdminUserService;
+import com.menusaas.admin.service.AuditService;
 import com.menusaas.shared.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,13 +25,15 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AdminController {
 
-    private final AdminService adminService;
-    private final AuditLogRepository auditLogRepository;
+    private final AdminStatsService statsService;
+    private final AdminRestaurantService restaurantService;
+    private final AdminUserService userService;
+    private final AuditService auditService;
 
     @Operation(summary = "Métricas globales de la plataforma (cache 30s)")
     @GetMapping("/stats")
     public ApiResponse<AdminStatsResponse> getStats() {
-        return ApiResponse.ok(adminService.getStats());
+        return ApiResponse.ok(statsService.getStats());
     }
 
     @Operation(summary = "Listar restaurantes con paginación y búsqueda (?search=&active=&page=&size=)")
@@ -38,20 +42,20 @@ public class AdminController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        return ApiResponse.ok(adminService.listRestaurants(search, active, pageable));
+        return ApiResponse.ok(restaurantService.listRestaurants(search, active, pageable));
     }
 
     @Operation(summary = "Crear un nuevo restaurante y su usuario administrador")
     @PostMapping("/restaurants")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminRestaurantResponse> createRestaurant(@Valid @RequestBody AdminCreateRestaurantRequest request) {
-        return ApiResponse.ok("Restaurante creado exitosamente", adminService.createRestaurant(request));
+        return ApiResponse.ok("Restaurante creado exitosamente", restaurantService.createRestaurant(request));
     }
 
     @Operation(summary = "Activar o desactivar restaurante por id")
     @PatchMapping("/restaurants/{id}/active")
     public ApiResponse<Void> toggleRestaurantActive(@PathVariable Long id, @RequestParam boolean active) {
-        adminService.toggleRestaurantActive(id, active);
+        restaurantService.toggleRestaurantActive(id, active);
         return ApiResponse.ok(active ? "Restaurante activado" : "Restaurante desactivado");
     }
 
@@ -62,13 +66,13 @@ public class AdminController {
             @RequestParam(required = false) String role,
             @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-        return ApiResponse.ok(adminService.listUsers(search, role, active, pageable));
+        return ApiResponse.ok(userService.listUsers(search, role, active, pageable));
     }
 
     @Operation(summary = "Activar o desactivar un usuario de la plataforma")
     @PatchMapping("/users/{id}/active")
     public ApiResponse<Void> toggleUserActive(@PathVariable Long id, @RequestParam boolean active) {
-        adminService.toggleUserActive(id, active);
+        userService.toggleUserActive(id, active);
         return ApiResponse.ok(active ? "Usuario activado" : "Usuario desactivado");
     }
 
@@ -78,9 +82,6 @@ public class AdminController {
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) Long entityId,
             @PageableDefault(size = 50, sort = "createdAt") Pageable pageable) {
-        if (entityType != null && entityId != null) {
-            return ApiResponse.ok(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable));
-        }
-        return ApiResponse.ok(auditLogRepository.findAllByOrderByCreatedAtDesc(pageable));
+        return ApiResponse.ok(auditService.list(entityType, entityId, pageable));
     }
 }

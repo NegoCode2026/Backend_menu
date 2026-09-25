@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 /**
  * Emisión y limpieza de cookies HttpOnly para access/refresh tokens.
  * - HttpOnly: JavaScript NO puede leer los tokens (mitiga robo por XSS).
- * - SameSite=Strict: la cookie no viaja en peticiones cross-site (mitiga CSRF).
- * - Secure: solo se envía por HTTPS (obligatorio en el perfil prod).
+ * - SameSite configurable: Strict (mismo-origen) o None (cross-site Vercel->túnel).
+ * - Secure: solo se envía por HTTPS (obligatorio en prod y con SameSite=None).
  */
 @Component
 public class CookieService {
@@ -84,6 +84,6 @@ public class CookieService {
     private void applyCommonAttributes(Cookie cookie) {
         cookie.setHttpOnly(true);
         cookie.setSecure(appProperties.security().cookiesSecure());
-        cookie.setAttribute("SameSite", "Strict");
+        cookie.setAttribute("SameSite", appProperties.security().cookieSameSite());
     }
 }

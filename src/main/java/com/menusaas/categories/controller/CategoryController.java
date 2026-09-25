@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Categories", description = "Categorías del menú (siempre del restaurante del JWT)")
@@ -40,18 +41,21 @@ public class CategoryController {
     @Operation(summary = "Crear categoría")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         return ApiResponse.ok("Categoría creada", categoryService.createMine(request));
     }
 
     @Operation(summary = "Actualizar categoría")
     @PutMapping("/{id}")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<CategoryResponse> update(@PathVariable Long id, @Valid @RequestBody CategoryRequest request) {
         return ApiResponse.ok("Categoría actualizada", categoryService.updateMine(id, request));
     }
 
     @Operation(summary = "Eliminar categoría (y sus productos)")
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permissions.has('MENU_EDIT')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         categoryService.deleteMine(id);
         return ApiResponse.ok("Categoría eliminada");

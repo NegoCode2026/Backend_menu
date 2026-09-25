@@ -43,7 +43,7 @@ public class SubscriptionService {
     public List<PlanResponse> listPlans() {
         return planRepository.findByActiveTrueOrderByPriceMonthlyAsc()
                 .stream()
-                .map(this::toPlanResponse)
+                .map(PlanResponse::from)
                 .toList();
     }
 
@@ -144,6 +144,26 @@ public class SubscriptionService {
     }
 
     /**
+     * Despacha un evento ya verificado de la pasarela hacia el caso de uso
+     * correspondiente. Evento nulo o tipo desconocido = sin operación.
+     */
+    @Transactional
+    public void applyGatewayEvent(PaymentGateway.PaymentEvent event) {
+        if (event == null) {
+            return;
+        }
+        switch (event.type()) {
+            case PaymentGateway.PaymentEvent.TYPE_CHECKOUT_COMPLETED ->
+                    activateFromGateway(
+                            event.restaurantId(), event.planCode(), event.providerReference(), event.periodEnd());
+            case PaymentGateway.PaymentEvent.TYPE_SUBSCRIPTION_CANCELLED ->
+                    cancelFromGateway(event.restaurantId(), event.providerReference());
+            default -> {
+            }
+        }
+    }
+
+    /**
      * Procesa la cancelación reportada por la pasarela (customer.subscription.deleted).
      */
     @Transactional
@@ -199,14 +219,6 @@ public class SubscriptionService {
     private SubscriptionResponse toResponse(Subscription s) {
         Plan plan = planRepository.findById(s.getPlanId())
                 .orElseThrow(() -> new IllegalStateException("Plan de la suscripción no existe"));
-        return new SubscriptionResponse(
-                s.getId(), s.getRestaurantId(), toPlanResponse(plan),
-                s.getStatus(), s.getProvider(), s.getProviderReference(),
-                s.getStartsAt(), s.getEndsAt()
-        );
-    }
-
-    private PlanResponse toPlanResponse(Plan p) {
-        return new PlanResponse(p.getId(), p.getCode(), p.getName(), p.getDescription(), p.getPriceMonthly());
+        return SubscriptionResponse.from(s, PlanResponse.from(plan));
     }
 }

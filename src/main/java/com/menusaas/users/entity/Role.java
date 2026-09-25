@@ -27,4 +27,6 @@ public class Role {
     public static final String SUPER_ADMIN = "SUPER_ADMIN";
     public static final String RESTAURANT_ADMIN = "RESTAURANT_ADMIN";
     public static final String RESTAURANT_USER = "RESTAURANT_USER";
+    public static final String WAITER = "WAITER";
+    public static final String CASHIER = "CASHIER";
 }
