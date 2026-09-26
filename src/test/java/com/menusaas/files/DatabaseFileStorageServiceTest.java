@@ -194,10 +194,11 @@ class DatabaseFileStorageServiceTest {
 
     @Test
     void load_missingInDb_fallsBackToLocal() {
-        when(repository.findById("local.png")).thenReturn(Optional.empty());
-        new LocalFileStorageService(localProps()).storeDirect("local.png", PNG_BYTES);
+        String localId = new LocalFileStorageService(localProps()).store(
+                new org.springframework.mock.web.MockMultipartFile("file", "local.png", "image/png", PNG_BYTES));
+        when(repository.findById(localId)).thenReturn(Optional.empty());
 
-        FileStorageService.StoredFile stored = storage.load("local.png");
+        FileStorageService.StoredFile stored = storage.load(localId);
 
         assertThat(stored.content()).isEqualTo(PNG_BYTES);
     }

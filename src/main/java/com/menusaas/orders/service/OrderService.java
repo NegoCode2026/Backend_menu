@@ -3,7 +3,6 @@ package com.menusaas.orders.service;
 import com.menusaas.orders.dto.CreateManualOrderRequest;
 import com.menusaas.orders.dto.CreateOrderRequest;
 import com.menusaas.orders.dto.OrderResponse;
-import com.menusaas.orders.dto.OrderStatsResponse;
 import com.menusaas.orders.dto.UpdateOrderRequest;
 import com.menusaas.orders.entity.Order;
 import com.menusaas.orders.entity.OrderItem;
@@ -36,8 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -107,22 +104,6 @@ public class OrderService {
         OrderResponse response = withHistory(saved);
         orderEvents.orderCreated(response);
         return response;
-    }
-
-    /** Compatibilidad para consumidores que ya usaban el DTO público. */
-    @Transactional
-    public OrderResponse createMine(CreateOrderRequest request) {
-        return createMine(new CreateManualOrderRequest(
-                request.customerName(),
-                request.customerPhone(),
-                request.tableNumber(),
-                request.deliveryAddress(),
-                request.notes(),
-                request.orderType(),
-                request.discountAmount(),
-                request.tipAmount(),
-                request.items()
-        ));
     }
 
     @Transactional
@@ -242,12 +223,6 @@ public class OrderService {
         return withHistory(orders);
     }
 
-    /** Compat: listado simple sin paginación. */
-    @Transactional(readOnly = true)
-    public List<OrderResponse> listMine(OrderStatus status) {
-        return listMine(status, null, null, null);
-    }
-
     @Transactional(readOnly = true)
     public OrderResponse getMine(Long id) {
         Order order = getMineOrder(id);
@@ -259,24 +234,6 @@ public class OrderService {
         Order order = orderRepository.findByTrackingCode(trackingCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
         return withHistory(order);
-    }
-
-    @Transactional(readOnly = true)
-    public OrderStatsResponse statsMine() {
-        Long restaurantId = SecurityUtils.currentRestaurantId();
-        Instant todayStart = LocalDate.now(ZoneId.systemDefault()).atStartOfDay(ZoneId.systemDefault()).toInstant();
-
-        return OrderStatsResponse.from(
-                orderRepository.countByRestaurantId(restaurantId),
-                orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.PENDING),
-                orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.CONFIRMED),
-                orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.IN_PREPARATION),
-                orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.READY),
-                orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.DELIVERED),
-                orderRepository.countByRestaurantIdAndStatus(restaurantId, OrderStatus.CANCELLED),
-                orderRepository.countByRestaurantIdAndCreatedAtGreaterThanEqual(restaurantId, todayStart),
-                orderRepository.sumTotalSince(restaurantId, todayStart)
-        );
     }
 
     @Transactional

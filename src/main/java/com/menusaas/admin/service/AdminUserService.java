@@ -41,12 +41,6 @@ public class AdminUserService {
         return page.map(AdminUserResponse::from);
     }
 
-    /** Compat con callers antiguos. */
-    @Transactional(readOnly = true)
-    public List<AdminUserResponse> listUsers() {
-        return listUsers(null, null, null, Pageable.ofSize(100)).getContent();
-    }
-
     @CacheEvict(value = "adminStats", allEntries = true)
     @Transactional
     public void toggleUserActive(Long id, boolean active) {

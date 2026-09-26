@@ -2,7 +2,6 @@ package com.menusaas.orders.controller;
 
 import com.menusaas.orders.dto.CreateManualOrderRequest;
 import com.menusaas.orders.dto.OrderResponse;
-import com.menusaas.orders.dto.OrderStatsResponse;
 import com.menusaas.orders.dto.OrderStatusRequest;
 import com.menusaas.orders.dto.PayOrderRequest;
 import com.menusaas.orders.dto.UpdateOrderRequest;
@@ -36,12 +35,6 @@ public class OrderController {
                                                  @RequestParam(required = false) Integer page,
                                                  @RequestParam(required = false) Integer size) {
         return ApiResponse.ok(orderService.listMine(status, since, page, size));
-    }
-
-    @Operation(summary = "Resumen de pedidos por estado y del día de mi restaurante")
-    @GetMapping("/stats")
-    public ApiResponse<OrderStatsResponse> stats() {
-        return ApiResponse.ok(orderService.statsMine());
     }
 
     @Operation(summary = "Crear un pedido manualmente (teléfono o presencial; nombre opcional)")

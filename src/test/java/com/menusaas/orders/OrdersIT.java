@@ -380,14 +380,6 @@ class OrdersIT extends BaseIntegrationTest {
                 TestHttp.body(objectMapper, Map.of("items", List.of()), owner), JsonNode.class);
         assertThat(emptyEdit.getStatusCode().value()).isEqualTo(400);
 
-        // Stats: total incluye el pedido, hoy incluye el pedido
-        ResponseEntity<JsonNode> stats = rest.exchange("/api/orders/stats", HttpMethod.GET, owner.get(), JsonNode.class);
-        assertThat(stats.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(stats.getBody().get("data").get("total").asLong()).isEqualTo(1);
-        assertThat(stats.getBody().get("data").get("pending").asLong()).isEqualTo(1);
-        assertThat(stats.getBody().get("data").get("todayCount").asLong()).isEqualTo(1);
-        assertThat(stats.getBody().get("data").get("todayRevenue").asDouble()).isEqualTo(30000.0);
-
         // Filtro "since": con el pasaso 1 hora trae el pedido; con el futuro no trae nada
         String past = java.time.Instant.now().minusSeconds(3600).toString();
         ResponseEntity<JsonNode> since = rest.exchange("/api/orders?since=" + past, HttpMethod.GET,

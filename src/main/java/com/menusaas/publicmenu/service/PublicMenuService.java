@@ -65,20 +65,6 @@ public class PublicMenuService {
         );
     }
 
-    /**
-     * Directorio público de restaurantes activos con conteo de productos
-     * disponibles (módulo Explore).
-     */
-    @Transactional(readOnly = true)
-    public java.util.List<com.menusaas.restaurants.dto.DirectoryRestaurantResponse> getDirectory() {
-        java.util.List<Restaurant> restaurants = restaurantService.findAllActiveOrderedByName();
-        java.util.Map<Long, Long> productCounts = productService.countAvailableGroupedByRestaurant();
-        return restaurants.stream()
-                .map(r -> com.menusaas.restaurants.dto.DirectoryRestaurantResponse.from(
-                        r, productCounts.getOrDefault(r.getId(), 0L)))
-                .toList();
-    }
-
     private PublicMenuResponse.ProductInfo toProductInfo(Product p) {
         return PublicMenuResponse.ProductInfo.from(
                 p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()));

@@ -39,26 +39,4 @@ public class RestaurantController {
     public ApiResponse<RestaurantResponse> setOpenMine(@Valid @RequestBody RestaurantOpenRequest request) {
         return ApiResponse.ok("Estado actualizado", restaurantService.setOpenMine(request.open()));
     }
-
-    @Operation(summary = "Obtener restaurante por id (solo SUPER_ADMIN)")
-    @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ApiResponse<RestaurantResponse> getById(@PathVariable Long id) {
-        return ApiResponse.ok(restaurantService.getById(id));
-    }
-
-    @Operation(summary = "Actualizar restaurante por id (solo SUPER_ADMIN)")
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ApiResponse<RestaurantResponse> updateById(@PathVariable Long id, @Valid @RequestBody RestaurantRequest request) {
-        return ApiResponse.ok("Restaurante actualizado", restaurantService.updateById(id, request));
-    }
-
-    @Operation(summary = "Desactivar restaurante (solo SUPER_ADMIN)")
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ApiResponse<Void> deleteById(@PathVariable Long id) {
-        restaurantService.deleteById(id);
-        return ApiResponse.ok("Restaurante desactivado");
-    }
 }
