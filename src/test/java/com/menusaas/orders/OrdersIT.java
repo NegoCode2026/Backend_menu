@@ -316,6 +316,27 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(third.getBody().get("data").get("unpaidOrders")).isEmpty();
     }
 
+    /**
+     * Un plato se puede crear solo con nombre y precio: sin descripción,
+     * sin foto y sin categoría (queda "sin categoría").
+     */
+    @Test
+    void product_canBeCreatedBare() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Bare Product Owner", "bare-product@test.com", "bare-product");
+
+        ResponseEntity<JsonNode> created = rest.exchange("/api/products", HttpMethod.POST,
+                TestHttp.body(objectMapper, Map.of(
+                        "name", "Plato Simple",
+                        "price", 15000,
+                        "available", true), owner), JsonNode.class);
+
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        JsonNode data = created.getBody().get("data");
+        assertThat(data.get("name").asText()).isEqualTo("Plato Simple");
+        assertThat(data.path("categoryId").isNull()).isTrue();
+    }
+
     @Test
     void manualOrder_canUseTableWithoutCustomerName() throws Exception {
         TestHttp.Session owner = TestHttp.register(rest, objectMapper,

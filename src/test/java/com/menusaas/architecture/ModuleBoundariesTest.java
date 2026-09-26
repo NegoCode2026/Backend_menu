@@ -34,7 +34,7 @@ class ModuleBoundariesTest {
     private static final List<String> DOMAIN_MODULES = List.of(
             "cash", "categories", "files", "inventory", "orders", "permissions",
             "products", "publicmenu", "realtime", "reports",
-            "restaurants", "subscriptions", "users");
+            "restaurants", "subscriptions", "tables", "users");
 
     @Test
     void modules_shouldOnlyUseOwnRepositories() {
