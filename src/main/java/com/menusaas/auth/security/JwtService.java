@@ -91,8 +91,4 @@ public class JwtService {
     public Instant refreshTokenExpiry() {
         return Instant.now().plus(jwtProps.refreshTokenTtlHours(), ChronoUnit.HOURS);
     }
-
-    public long accessTokenTtlSeconds() {
-        return jwtProps.accessTokenTtlMinutes() * 60L;
-    }
 }

@@ -99,12 +99,6 @@ public class AdminRestaurantService {
         return planNames.getOrDefault(sub.getPlanId(), "Sin plan");
     }
 
-    /** Compat con callers antiguos: página grande sin filtros. */
-    @Transactional(readOnly = true)
-    public List<AdminRestaurantResponse> listRestaurants() {
-        return listRestaurants(null, null, Pageable.ofSize(100)).getContent();
-    }
-
     @CacheEvict(value = "adminStats", allEntries = true)
     @Transactional
     public AdminRestaurantResponse createRestaurant(AdminCreateRestaurantRequest request) {

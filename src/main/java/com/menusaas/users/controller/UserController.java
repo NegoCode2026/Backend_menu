@@ -29,12 +29,6 @@ public class UserController {
         return ApiResponse.ok(userService.listMine());
     }
 
-    @Operation(summary = "Obtener un usuario de mi restaurante")
-    @GetMapping("/{id}")
-    public ApiResponse<UserResponse> get(@PathVariable Long id) {
-        return ApiResponse.ok(userService.getMine(id));
-    }
-
     @Operation(summary = "Crear usuario (solo RESTAURANT_ADMIN)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

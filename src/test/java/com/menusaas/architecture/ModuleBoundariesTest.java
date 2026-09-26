@@ -33,8 +33,8 @@ class ModuleBoundariesTest {
 
     private static final List<String> DOMAIN_MODULES = List.of(
             "cash", "categories", "files", "inventory", "orders", "permissions",
-            "products", "publicmenu", "qr", "realtime", "reports",
-            "restaurants", "subscriptions", "users");
+            "products", "publicmenu", "realtime", "reports",
+            "restaurants", "subscriptions", "tables", "users");
 
     @Test
     void modules_shouldOnlyUseOwnRepositories() {
@@ -65,7 +65,6 @@ class ModuleBoundariesTest {
                         "com.menusaas.permissions.repository",
                         "com.menusaas.products.repository",
                         "com.menusaas.publicmenu.repository",
-                        "com.menusaas.qr.repository",
                         "com.menusaas.realtime.repository",
                         "com.menusaas.reports.repository",
                         "com.menusaas.subscriptions.repository",

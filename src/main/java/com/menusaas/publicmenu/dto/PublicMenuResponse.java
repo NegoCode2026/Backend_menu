@@ -9,11 +9,14 @@ import java.util.List;
 
 public record PublicMenuResponse(
         RestaurantInfo restaurant,
-        List<CategoryInfo> categories
+        List<CategoryInfo> categories,
+        /** Números de mesa registrados (para validar el QR y el picker). Vacía si no hay. */
+        List<String> tables
 ) {
 
-    public static PublicMenuResponse from(RestaurantInfo restaurant, List<CategoryInfo> categories) {
-        return new PublicMenuResponse(restaurant, categories);
+    public static PublicMenuResponse from(RestaurantInfo restaurant, List<CategoryInfo> categories,
+                                          List<String> tables) {
+        return new PublicMenuResponse(restaurant, categories, tables != null ? tables : List.of());
     }
 
     public record RestaurantInfo(

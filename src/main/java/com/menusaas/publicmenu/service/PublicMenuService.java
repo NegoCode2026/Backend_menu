@@ -8,6 +8,7 @@ import com.menusaas.products.entity.Product;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
+import com.menusaas.tables.service.TableService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class PublicMenuService {
     private final RestaurantService restaurantService;
     private final CategoryService categoryService;
     private final ProductService productService;
+    private final TableService tableService;
     private final SignedUrlService signedUrlService;
 
     @Transactional(readOnly = true)
@@ -61,22 +63,9 @@ public class PublicMenuService {
         return PublicMenuResponse.from(
                 PublicMenuResponse.RestaurantInfo.from(
                         restaurant, signedUrlService.toSignedUrlOrNull(restaurant.getLogoUrl())),
-                categoryInfos
+                categoryInfos,
+                tableService.findNumbersByRestaurantId(restaurant.getId())
         );
-    }
-
-    /**
-     * Directorio público de restaurantes activos con conteo de productos
-     * disponibles (módulo Explore).
-     */
-    @Transactional(readOnly = true)
-    public java.util.List<com.menusaas.restaurants.dto.DirectoryRestaurantResponse> getDirectory() {
-        java.util.List<Restaurant> restaurants = restaurantService.findAllActiveOrderedByName();
-        java.util.Map<Long, Long> productCounts = productService.countAvailableGroupedByRestaurant();
-        return restaurants.stream()
-                .map(r -> com.menusaas.restaurants.dto.DirectoryRestaurantResponse.from(
-                        r, productCounts.getOrDefault(r.getId(), 0L)))
-                .toList();
     }
 
     private PublicMenuResponse.ProductInfo toProductInfo(Product p) {

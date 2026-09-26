@@ -30,12 +30,6 @@ public class RestaurantService {
         return toResponse(findByIdOrThrow(restaurantId));
     }
 
-    @Transactional(readOnly = true)
-    public RestaurantResponse getById(Long id) {
-        requireSuperAdmin();
-        return toResponse(findByIdOrThrow(id));
-    }
-
     @Transactional
     public RestaurantResponse updateMine(RestaurantRequest request) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
@@ -49,21 +43,6 @@ public class RestaurantService {
         Restaurant restaurant = findByIdOrThrow(restaurantId);
         restaurant.setOpen(open);
         return toResponse(restaurantRepository.save(restaurant));
-    }
-
-    @Transactional
-    public RestaurantResponse updateById(Long id, RestaurantRequest request) {
-        requireSuperAdmin();
-        Restaurant restaurant = findByIdOrThrow(id);
-        return toResponse(update(restaurant, request));
-    }
-
-    @Transactional
-    public void deleteById(Long id) {
-        requireSuperAdmin();
-        Restaurant restaurant = findByIdOrThrow(id);
-        restaurant.setActive(false);
-        restaurantRepository.save(restaurant);
     }
 
     // ------------------------------------------------------------------
@@ -94,11 +73,6 @@ public class RestaurantService {
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
     }
 
-    @Transactional(readOnly = true)
-    public java.util.List<Restaurant> findAllActiveOrderedByName() {
-        return restaurantRepository.findAllByActiveTrueOrderByNameAsc();
-    }
-
     /**
      * Referencia JPA sin consulta (para asignar el tenant al crear entidades).
      * Puerta de acceso para users: evita que otros módulos toquen RestaurantRepository.
@@ -106,17 +80,6 @@ public class RestaurantService {
     @Transactional(readOnly = true)
     public Restaurant getReferenceById(Long id) {
         return restaurantRepository.getReferenceById(id);
-    }
-
-    /**
-     * Slug del restaurante (para QR/URLs públicas del propio tenant).
-     * Puerta de acceso para qr: evita que los controllers toquen RestaurantRepository.
-     */
-    @Transactional(readOnly = true)
-    public String slugOrThrow(Long restaurantId) {
-        return restaurantRepository.findById(restaurantId)
-                .map(Restaurant::getSlug)
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
     }
 
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {
@@ -147,12 +110,6 @@ public class RestaurantService {
     private Restaurant findByIdOrThrow(Long id) {
         return restaurantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
-    }
-
-    private void requireSuperAdmin() {
-        if (!Role.SUPER_ADMIN.equals(SecurityUtils.currentUser().getRole())) {
-            throw new com.menusaas.shared.api.ForbiddenException("Solo el super administrador puede realizar esta operación");
-        }
     }
 
     private RestaurantResponse toResponse(Restaurant r) {

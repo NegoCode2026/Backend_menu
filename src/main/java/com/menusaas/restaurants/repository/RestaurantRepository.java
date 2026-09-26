@@ -33,8 +33,6 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
 
     java.util.List<Restaurant> findAllByOrderByIdDesc();
 
-    java.util.List<Restaurant> findAllByActiveTrueOrderByNameAsc();
-
     @Query("""
             select r from Restaurant r
             where (:active is null or r.active = :active)

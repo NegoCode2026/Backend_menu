@@ -205,18 +205,6 @@ class LocalFileStorageServiceTest {
     }
 
     @Test
-    void storeDirect_roundtripAndInvalidIds() {
-        storage.storeDirect("directo.png", PNG_BYTES);
-        assertThat(storage.load("directo.png").content()).isEqualTo(PNG_BYTES);
-
-        // Ids inválidos se ignoran sin romper ni escribir fuera del directorio
-        storage.storeDirect(null, PNG_BYTES);
-        storage.storeDirect("mala/ruta!", PNG_BYTES);
-        storage.storeDirect("..", PNG_BYTES);
-        assertThat(Files.exists(tempDir.resolve("..").resolve("directo.png"))).isFalse();
-    }
-
-    @Test
     void load_dotDotId_rejected() {
         assertThatThrownBy(() -> storage.load(".."))
                 .isInstanceOf(BadRequestException.class);
@@ -233,8 +221,9 @@ class LocalFileStorageServiceTest {
         assertThatThrownBy(() -> storage.resolvePath("no-existe.png"))
                 .isInstanceOf(BadRequestException.class);
 
-        storage.storeDirect("real.png", PNG_BYTES);
-        assertThat(Files.exists(storage.resolvePath("real.png"))).isTrue();
+        String fileId = storage.store(
+                new MockMultipartFile("file", "real.png", "image/png", PNG_BYTES));
+        assertThat(Files.exists(storage.resolvePath(fileId))).isTrue();
     }
 
     @Test

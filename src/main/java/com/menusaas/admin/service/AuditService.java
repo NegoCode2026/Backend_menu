@@ -20,15 +20,6 @@ public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
 
-    @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<AuditLog> list(
-            String entityType, Long entityId, org.springframework.data.domain.Pageable pageable) {
-        if (entityType != null && entityId != null) {
-            return auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable);
-        }
-        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String action, String entityType, Long entityId, String detail) {        try {
             Long actorId = null;
