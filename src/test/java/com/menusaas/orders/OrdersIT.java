@@ -337,6 +337,51 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(data.path("categoryId").isNull()).isTrue();
     }
 
+    /**
+     * La mesa del QR debe existir: con mesas registradas, un pedido público
+     * a una mesa fantasma (?mesa=2000) se rechaza; a una real pasa.
+     */
+    @Test
+    void publicOrder_unknownTable_isRejected() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Table Guard Owner", "table-guard@test.com", "table-guard");
+        long productId = createProduct(owner, "Plato Mesa", 8000);
+        for (String num : List.of("01", "02")) {
+            ResponseEntity<JsonNode> t = rest.exchange("/api/tables", HttpMethod.POST,
+                    TestHttp.body(objectMapper, Map.of("number", num, "seats", 4), owner), JsonNode.class);
+            assertThat(t.getStatusCode().value()).isEqualTo(201);
+        }
+
+        // El menú público expone las mesas registradas
+        ResponseEntity<JsonNode> menu = rest.getForEntity("/api/public/menu/table-guard", JsonNode.class);
+        assertThat(menu.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(menu.getBody().get("data").get("tables").toString()).contains("01", "02");
+
+        // Mesa fantasma → 400
+        ResponseEntity<JsonNode> ghost = postPublicOrder("table-guard", Map.of(
+                "customerName", "Mesa 2000",
+                "tableNumber", "Mesa 2000",
+                "orderType", "DINE_IN",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        assertThat(ghost.getStatusCode().value()).isEqualTo(400);
+
+        // Mesa real (con o sin prefijo) → 201
+        ResponseEntity<JsonNode> ok1 = postPublicOrder("table-guard", Map.of(
+                "customerName", "Mesa 02",
+                "tableNumber", "Mesa 02",
+                "orderType", "DINE_IN",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        assertThat(ok1.getStatusCode().value()).isEqualTo(201);
+
+        ResponseEntity<JsonNode> ok2 = postPublicOrder("table-guard", Map.of(
+                "customerName", "Mesa 1",
+                "tableNumber", "1",
+                "orderType", "DINE_IN",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        assertThat(ok2.getStatusCode().value()).isEqualTo(201);
+        assertThat(ok2.getBody().get("data").get("tableNumber").asText()).isEqualTo("1");
+    }
+
     @Test
     void manualOrder_canUseTableWithoutCustomerName() throws Exception {
         TestHttp.Session owner = TestHttp.register(rest, objectMapper,

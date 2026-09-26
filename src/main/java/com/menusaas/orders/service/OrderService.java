@@ -18,6 +18,7 @@ import com.menusaas.products.entity.Product;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
+import com.menusaas.tables.service.TableService;
 import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
@@ -62,6 +63,7 @@ public class OrderService {
     private final OrderEventPublisher orderEvents;
     private final PermissionService permissions;
     private final OrderPricing pricing;
+    private final TableService tableService;
 
     @Transactional
     public OrderResponse createPublicOrder(String slug, CreateOrderRequest request) {
@@ -88,6 +90,17 @@ public class OrderService {
                 .status(OrderStatus.PENDING)
                 .totalAmount(BigDecimal.ZERO)
                 .build();
+
+        // La mesa debe existir si el restaurante tiene mesas registradas:
+        // un QR manipulado (?mesa=2000) no puede colar pedidos a mesas fantasmas.
+        if (order.getOrderType() == OrderType.DINE_IN
+                && order.getTableNumber() != null && !order.getTableNumber().isBlank()) {
+            java.util.List<String> knownTables = tableService.findNumbersByRestaurantId(restaurantId);
+            if (!knownTables.isEmpty()
+                    && !TableService.matchesKnownTable(knownTables, order.getTableNumber())) {
+                throw new BadRequestException("La mesa indicada no existe en este restaurante");
+            }
+        }
 
         pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 

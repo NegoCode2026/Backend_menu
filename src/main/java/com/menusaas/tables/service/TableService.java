@@ -34,6 +34,44 @@ public class TableService {
                 .toList();
     }
 
+    /**
+     * Números de mesa para el menú público y la validación de pedidos.
+     * Consulta explícita por tenant (sin SecurityUtils): el menú público
+     * no tiene sesión.
+     */
+    @Transactional(readOnly = true)
+    public List<String> findNumbersByRestaurantId(Long restaurantId) {
+        return tableRepository.findByRestaurantIdOrderByIdAsc(restaurantId)
+                .stream()
+                .map(RestaurantTable::getNumber)
+                .toList();
+    }
+
+    /**
+     * ¿La etiqueta corresponde a una mesa registrada? Compara por número
+     * (ignora ceros a la izquierda: "01" = "1") o por texto exacto
+     * ("Terraza" = "terraza").
+     */
+    public static boolean matchesKnownTable(List<String> known, String label) {
+        if (known == null || known.isEmpty() || label == null || label.isBlank()) return false;
+        String norm = label.trim();
+        String digits = digitsOf(norm);
+        for (String k : known) {
+            if (k == null) continue;
+            if (k.equalsIgnoreCase(norm)) return true;
+            String kd = digitsOf(k);
+            if (!digits.isEmpty() && !kd.isEmpty() && digits.equals(kd)) return true;
+        }
+        return false;
+    }
+
+    private static String digitsOf(String s) {
+        String d = s.replaceAll("\\D", "");
+        if (d.isEmpty()) return "";
+        String stripped = d.replaceFirst("^0+", "");
+        return stripped.isEmpty() ? "0" : stripped;
+    }
+
     @Transactional
     public TableResponse createMine(CreateTableRequest request) {
         permissions.require(Permissions.ORDERS_EDIT);
