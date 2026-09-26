@@ -34,7 +34,7 @@ class ModuleBoundariesTest {
     private static final List<String> DOMAIN_MODULES = List.of(
             "cash", "categories", "files", "inventory", "orders", "permissions",
             "products", "publicmenu", "qr", "realtime", "reports",
-            "restaurants", "subscriptions", "users");
+            "restaurants", "subscriptions", "tables", "users");
 
     @Test
     void modules_shouldOnlyUseOwnRepositories() {
@@ -69,6 +69,7 @@ class ModuleBoundariesTest {
                         "com.menusaas.realtime.repository",
                         "com.menusaas.reports.repository",
                         "com.menusaas.subscriptions.repository",
+                        "com.menusaas.tables.repository",
                         "com.menusaas.admin.repository")
                 .because("auth solo toca users/restaurants (identidad), nunca el resto");
         rule.check(classes);

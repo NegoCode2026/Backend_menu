@@ -1,6 +1,7 @@
 package com.menusaas.products.service;
 
 import com.menusaas.categories.service.CategoryService;
+import com.menusaas.files.service.CloudinaryAssetService;
 import com.menusaas.inventory.entity.MovementReason;
 import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.shared.security.SignedUrlService;
@@ -22,6 +23,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
+    private final CloudinaryAssetService assetService;
     private final SignedUrlService signedUrlService;
     private final InventoryService inventoryService;
     private final ProductRecipeService recipeService;
@@ -71,7 +73,14 @@ public class ProductService {
         product.setName(request.name().trim());
         if (request.description() != null) product.setDescription(request.description());
         product.setPrice(request.price());
-        if (request.imageUrl() != null) product.setImageUrl(signedUrlService.toStoredValue(request.imageUrl()));
+        if (request.imageUrl() != null) {
+            String newImage = signedUrlService.toStoredValue(request.imageUrl());
+            if (!java.util.Objects.equals(product.getImageUrl(), newImage)) {
+                String oldImage = product.getImageUrl();
+                product.setImageUrl(newImage);
+                destroyImageIfUnused(oldImage, product.getId(), product.getRestaurantId());
+            }
+        }
         if (request.available() != null) product.setAvailable(request.available());
         if (request.position() != null) product.setPosition(request.position());
         if (request.costPrice() != null) product.setCostPrice(request.costPrice());
@@ -84,7 +93,9 @@ public class ProductService {
     @Transactional
     public void deleteMine(Long id) {
         Product product = findScoped(id);
+        String imageUrl = product.getImageUrl();
         productRepository.delete(product);
+        destroyImageIfUnused(imageUrl, id, product.getRestaurantId());
     }
 
     // ------------------------------------------------------------------
@@ -125,7 +136,19 @@ public class ProductService {
 
     @Transactional
     public int deleteByCategoryAndRestaurant(Long categoryId, Long restaurantId) {
-        return productRepository.deleteByCategoryIdAndRestaurantId(categoryId, restaurantId);
+        java.util.List<String> images = productRepository
+                .findByCategoryScoped(categoryId, restaurantId, false).stream()
+                .map(Product::getImageUrl)
+                .filter(url -> url != null && !url.isBlank())
+                .distinct()
+                .toList();
+        int deleted = productRepository.deleteByCategoryIdAndRestaurantId(categoryId, restaurantId);
+        for (String imageUrl : images) {
+            if (!productRepository.existsByImageUrlAndRestaurantId(imageUrl, restaurantId)) {
+                assetService.destroyBySecureUrlIfOwned(imageUrl);
+            }
+        }
+        return deleted;
     }
 
     // ------------------------------------------------------------------
@@ -220,5 +243,18 @@ public class ProductService {
 
     private ProductResponse toResponse(Product p) {
         return ProductResponse.from(p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()));
+    }
+
+    /**
+     * Destruye la imagen anterior en Cloudinary si ya no la referencia otro
+     * producto del restaurante. Las URLs externas no registradas se ignoran.
+     */
+    private void destroyImageIfUnused(String imageUrl, Long excludeProductId, Long restaurantId) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return;
+        }
+        if (!productRepository.existsByImageUrlAndRestaurantIdAndIdNot(imageUrl, restaurantId, excludeProductId)) {
+            assetService.destroyBySecureUrlIfOwned(imageUrl);
+        }
     }
 }

@@ -9,6 +9,7 @@ import com.menusaas.permissions.repository.RolePermissionRepository;
 import com.menusaas.permissions.repository.UserPermissionRepository;
 import com.menusaas.products.repository.ProductRepository;
 import com.menusaas.subscriptions.repository.SubscriptionRepository;
+import com.menusaas.tables.repository.RestaurantTableRepository;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
@@ -46,6 +47,7 @@ class TenantRepositoriesTest {
             RolePermissionRepository.class,
             UserPermissionRepository.class,
             ProductRepository.class,
+            RestaurantTableRepository.class,
             SubscriptionRepository.class);
 
     /**
@@ -56,6 +58,8 @@ class TenantRepositoriesTest {
      *   @Query (verificado en la interfaz).
      * - ProductRepository.findByCategoryScoped: filtrado por restaurantId
      *   dentro del @Query (verificado en la interfaz).
+     * - RestaurantTableRepository.findByCode: validación del QR por UUID no
+     *   adivinable (endpoint público de resolve; el tenant se valida después).
      * - SubscriptionRepository.findByProviderReference: búsqueda por referencia
      *   externa del webhook (no enumerable).
      * - SubscriptionRepository.findByStatusAndEndsAtBefore/countByStatus:
@@ -64,6 +68,7 @@ class TenantRepositoriesTest {
     private static final Map<Class<?>, Set<String>> ALLOWED_UNSCOPED = Map.of(
             OrderRepository.class, Set.of("findByTrackingCode", "sumTotalSince"),
             ProductRepository.class, Set.of("findByCategoryScoped"),
+            RestaurantTableRepository.class, Set.of("findByCode"),
             SubscriptionRepository.class, Set.of(
                     "findByProviderReference", "findByStatusAndEndsAtBefore", "countByStatus"));
 

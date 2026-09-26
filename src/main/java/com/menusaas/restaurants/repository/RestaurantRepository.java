@@ -29,6 +29,12 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
 
     boolean existsBySlug(String slug);
 
+    /**
+     * ¿Otro restaurante usa este logo? (para no destruir en Cloudinary una
+     * URL todavía referenciada al reemplazar el logo).
+     */
+    boolean existsByLogoUrlAndIdNot(String logoUrl, Long id);
+
     long countByActive(boolean active);
 
     java.util.List<Restaurant> findAllByOrderByIdDesc();

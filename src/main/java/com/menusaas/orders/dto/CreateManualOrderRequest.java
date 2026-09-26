@@ -26,6 +26,8 @@ public record CreateManualOrderRequest(
         @Size(max = 30, message = "El número de mesa no puede superar 30 caracteres")
         String tableNumber,
 
+        java.util.UUID tableCode,
+
         @Size(max = 255, message = "La dirección del domicilio no puede superar 255 caracteres")
         String deliveryAddress,
 

@@ -1,6 +1,7 @@
 package com.menusaas.products;
 
 import com.menusaas.categories.service.CategoryService;
+import com.menusaas.files.service.CloudinaryAssetService;
 import com.menusaas.inventory.service.InventoryService;
 import com.menusaas.products.service.ProductRecipeService;
 import com.menusaas.products.dto.ProductRequest;
@@ -35,6 +36,9 @@ class ProductServiceTest {
     private CategoryService categoryService;
 
     @Mock
+    private CloudinaryAssetService assetService;
+
+    @Mock
     private SignedUrlService signedUrlService;
 
     @Mock
@@ -47,7 +51,7 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryService, signedUrlService, inventoryService, recipeService);
+        productService = new ProductService(productRepository, categoryService, assetService, signedUrlService, inventoryService, recipeService);
     }
 
     @Test

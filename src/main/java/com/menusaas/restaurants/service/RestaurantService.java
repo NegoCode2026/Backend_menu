@@ -1,5 +1,6 @@
 package com.menusaas.restaurants.service;
 
+import com.menusaas.files.service.CloudinaryAssetService;
 import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.restaurants.dto.RestaurantRequest;
 import com.menusaas.restaurants.dto.RestaurantResponse;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RestaurantService {
 
     private final RestaurantRepository restaurantRepository;
+    private final CloudinaryAssetService assetService;
     private final SignedUrlService signedUrlService;
 
     /**
@@ -71,6 +73,19 @@ public class RestaurantService {
     // Puerta de acceso para orders/publicmenu: evita que otros módulos
     // toquen RestaurantRepository directamente.
     // ------------------------------------------------------------------
+
+    /**
+     * Puerta de acceso para tables: desde una mesa (restaurant_id) se accede
+     * al restaurante y su información para validar el QR. Solo activos.
+     */
+    @Transactional(readOnly = true)
+    public Restaurant findActiveByIdOrThrow(Long id) {
+        Restaurant restaurant = findByIdOrThrow(id);
+        if (!restaurant.isActive()) {
+            throw new ResourceNotFoundException("Menú no encontrado");
+        }
+        return restaurant;
+    }
 
     @Transactional(readOnly = true)
     public Restaurant findActiveBySlugOrThrow(String slug) {
@@ -127,7 +142,15 @@ public class RestaurantService {
         restaurant.setName(request.name().trim());
         restaurant.setSlug(slug);
         if (request.logoUrl() != null) {
-            restaurant.setLogoUrl(signedUrlService.toStoredValue(request.logoUrl()));
+            String newLogo = signedUrlService.toStoredValue(request.logoUrl());
+            if (!java.util.Objects.equals(restaurant.getLogoUrl(), newLogo)) {
+                String oldLogo = restaurant.getLogoUrl();
+                restaurant.setLogoUrl(newLogo);
+                if (oldLogo != null && !oldLogo.isBlank()
+                        && !restaurantRepository.existsByLogoUrlAndIdNot(oldLogo, restaurant.getId())) {
+                    assetService.destroyBySecureUrlIfOwned(oldLogo);
+                }
+            }
         }
         restaurant.setDescription(request.description());
         restaurant.setPhone(request.phone());

@@ -60,6 +60,8 @@ app:
     epayco-customer-id: ${EPAYCO_CUSTOMER_ID:}
     epayco-p-key: ${EPAYCO_P_KEY:}
   cloudinary:
+    # NUNCA pegar credenciales reales aquí: van por variables de entorno
+    # (CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET o CLOUDINARY_URL).
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}

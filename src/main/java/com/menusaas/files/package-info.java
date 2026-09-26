@@ -1,4 +1,5 @@
 /**
- * Modulo files: Subida y servicio de imagenes (local/DB/Cloudinary) con URLs firmadas. Sin tenant propio: IDs no adivinables + firma HMAC.
+ * Modulo files: Subida real a Cloudinary (entidad CloudinaryAsset con public_id/url/secure_url)
+ * y lectura legacy de fileIds en BD con URLs firmadas. Sin tenant propio: URLs publicas + firma HMAC.
  */
 package com.menusaas.files;

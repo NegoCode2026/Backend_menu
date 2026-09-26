@@ -21,6 +21,13 @@ public record CreateOrderRequest(
         @Size(max = 30, message = "El número de mesa no puede superar 30 caracteres")
         String tableNumber,
 
+        /**
+         * Código QR de la mesa (?t={code}). Si viene, el backend lo valida:
+         * debe existir y pertenecer al restaurante del slug. Si no viene, se
+         * conserva tableNumber legacy (MVP retrocompatible).
+         */
+        java.util.UUID tableCode,
+
         @Size(max = 255, message = "La dirección del domicilio no puede superar 255 caracteres")
         String deliveryAddress,
 

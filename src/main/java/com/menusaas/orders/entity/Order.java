@@ -41,6 +41,13 @@ public class Order implements com.menusaas.shared.tenancy.TenantOwned {
     @Column(name = "table_number", length = 30)
     private String tableNumber;
 
+    /**
+     * Mesa validada por tableCode (FK a restaurant_tables, SET NULL al borrar).
+     * table_number queda como snapshot del label para el histórico.
+     */
+    @Column(name = "table_id")
+    private Long tableId;
+
     @Column(name = "delivery_address", length = 255)
     private String deliveryAddress;
 

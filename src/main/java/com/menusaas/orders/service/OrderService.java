@@ -19,6 +19,8 @@ import com.menusaas.products.entity.Product;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
+import com.menusaas.tables.entity.RestaurantTable;
+import com.menusaas.tables.service.TableService;
 import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.api.ForbiddenException;
 import com.menusaas.shared.api.ResourceNotFoundException;
@@ -60,6 +62,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderStatusHistoryRepository historyRepository;
     private final RestaurantService restaurantService;
+    private final TableService tableService;
     private final ProductService productService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final OrderEventPublisher orderEvents;
@@ -92,6 +95,14 @@ public class OrderService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
+        // Validación por tableCode: el code dice la mesa real y el restaurante.
+        // Si viene, prevalece sobre tableNumber legacy (se guarda el label como snapshot).
+        if (request.tableCode() != null) {
+            RestaurantTable table = tableService.requireBelongsToRestaurant(request.tableCode(), restaurantId);
+            order.setTableId(table.getId());
+            order.setTableNumber(table.getLabel());
+        }
+
         pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
         // Generación de consecutivo de pedido (ej. FMIX-0001)
@@ -116,6 +127,7 @@ public class OrderService {
                 request.customerName(),
                 request.customerPhone(),
                 request.tableNumber(),
+                request.tableCode(),
                 request.deliveryAddress(),
                 request.notes(),
                 request.orderType(),
@@ -142,6 +154,12 @@ public class OrderService {
                 .status(OrderStatus.PENDING)
                 .totalAmount(BigDecimal.ZERO)
                 .build();
+
+        if (request.tableCode() != null) {
+            RestaurantTable table = tableService.requireBelongsToRestaurant(request.tableCode(), restaurantId);
+            order.setTableId(table.getId());
+            order.setTableNumber(table.getLabel());
+        }
 
         pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
@@ -186,8 +204,14 @@ public class OrderService {
         if (request.customerPhone() != null) {
             order.setCustomerPhone(request.customerPhone().trim());
         }
-        if (request.tableNumber() != null) {
+        if (request.tableCode() != null) {
+            RestaurantTable table = tableService.requireBelongsToRestaurant(
+                    request.tableCode(), order.getRestaurantId());
+            order.setTableId(table.getId());
+            order.setTableNumber(table.getLabel());
+        } else if (request.tableNumber() != null) {
             order.setTableNumber(request.tableNumber().trim());
+            order.setTableId(null);
         }
         if (request.deliveryAddress() != null) {
             order.setDeliveryAddress(request.deliveryAddress().trim());

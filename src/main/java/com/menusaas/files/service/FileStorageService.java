@@ -6,8 +6,8 @@ import java.nio.file.Path;
 
 /**
  * Abstracción de almacenamiento de imágenes.
- * La implementación local guarda en disco; el acceso público se hace mediante
- * URLs firmadas con expiración (nunca sirviendo el directorio directamente).
+ * La implementación efectiva sube a Cloudinary y devuelve la secure_url;
+ * la lectura por fileId solo sirve para fileIds legacy ya guardados en BD.
  */
 public interface FileStorageService {
 

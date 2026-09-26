@@ -13,6 +13,7 @@ import com.menusaas.permissions.repository.RolePermissionRepository;
 import com.menusaas.permissions.repository.UserPermissionRepository;
 import com.menusaas.permissions.service.PermissionService;
 import com.menusaas.products.service.ProductService;
+import com.menusaas.tables.service.TableService;
 import com.menusaas.orders.events.OrderEventPublisher;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
@@ -51,6 +52,8 @@ class OrdersRoleTest {
     @Mock
     private RestaurantService restaurantService;
     @Mock
+    private TableService tableService;
+    @Mock
     private ProductService productService;
     @Mock
     private WhatsAppNotificationService whatsAppNotificationService;
@@ -70,7 +73,7 @@ class OrdersRoleTest {
         PermissionService permissions = new PermissionService(
                 rolePermissionRepository, userPermissionRepository, userService);
         orderService = new OrderService(orderRepository, historyRepository, restaurantService,
-                productService, whatsAppNotificationService, orderEvents, permissions,
+                tableService, productService, whatsAppNotificationService, orderEvents, permissions,
                 new OrderPricing(productService));
         // Sin filas personalizadas: valen los defaults por rol y por persona.
         lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))

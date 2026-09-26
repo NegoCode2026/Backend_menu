@@ -42,6 +42,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     long countByRestaurantId(Long restaurantId);
 
     /**
+     * ¿Otro producto del restaurante usa esta imagen? (para no destruir en
+     * Cloudinary una URL todavía referenciada al reemplazar/eliminar).
+     */
+    boolean existsByImageUrlAndRestaurantIdAndIdNot(String imageUrl, Long restaurantId, Long id);
+
+    boolean existsByImageUrlAndRestaurantId(String imageUrl, Long restaurantId);
+
+    /**
      * Conteo de productos agrupado por restaurante (panel admin: evita N+1).
      */
     @Query("select p.restaurantId, count(p) from Product p where p.restaurantId in :ids group by p.restaurantId")
