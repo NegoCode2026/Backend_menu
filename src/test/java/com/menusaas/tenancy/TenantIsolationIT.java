@@ -135,14 +135,14 @@ class TenantIsolationIT extends BaseIntegrationTest {
                 sessionA.get(), JsonNode.class);
         assertThat(todayA.getStatusCode().is2xxSuccessful()).isTrue();
 
-        // --- qr: cada restaurante obtiene su propio slug ---
-        ResponseEntity<JsonNode> qrA = rest.exchange("/api/qr/url", HttpMethod.GET,
+        // --- restaurants/me: cada restaurante obtiene su propio slug ---
+        ResponseEntity<JsonNode> meA = rest.exchange("/api/restaurants/me", HttpMethod.GET,
                 sessionA.get(), JsonNode.class);
-        assertThat(qrA.getBody().get("data").get("url").asText()).contains("/menu/iso-qr-a");
+        assertThat(meA.getBody().get("data").get("slug").asText()).isEqualTo("iso-qr-a");
 
-        ResponseEntity<JsonNode> qrB = rest.exchange("/api/qr/url", HttpMethod.GET,
+        ResponseEntity<JsonNode> meB = rest.exchange("/api/restaurants/me", HttpMethod.GET,
                 sessionB.get(), JsonNode.class);
-        assertThat(qrB.getBody().get("data").get("url").asText()).contains("/menu/iso-qr-b");
+        assertThat(meB.getBody().get("data").get("slug").asText()).isEqualTo("iso-qr-b");
 
         // --- users: B no ve a los usuarios de A; un WAITER no gestiona usuarios ---
         ResponseEntity<JsonNode> usersB = rest.exchange("/api/users", HttpMethod.GET,

@@ -94,7 +94,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(appProperties.cors().allowedOrigins());
+        // Patrones (no orígenes exactos) para admitir comodines como
+        // https://*.vercel.app (previews) además del dominio de producción.
+        // Los valores exactos existentes siguen funcionando igual.
+        config.setAllowedOriginPatterns(appProperties.cors().allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Content-Disposition"));

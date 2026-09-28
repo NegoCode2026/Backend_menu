@@ -62,6 +62,8 @@ class OrdersRoleTest {
     private UserPermissionRepository userPermissionRepository;
     @Mock
     private UserService userService;
+    @Mock
+    private com.menusaas.tables.service.TableService tableService;
 
     private OrderService orderService;
 
@@ -71,7 +73,7 @@ class OrdersRoleTest {
                 rolePermissionRepository, userPermissionRepository, userService);
         orderService = new OrderService(orderRepository, historyRepository, restaurantService,
                 productService, whatsAppNotificationService, orderEvents, permissions,
-                new OrderPricing(productService));
+                new OrderPricing(productService), tableService);
         // Sin filas personalizadas: valen los defaults por rol y por persona.
         lenient().when(rolePermissionRepository.findByRestaurantIdAndRole(any(), any()))
                 .thenReturn(List.of());

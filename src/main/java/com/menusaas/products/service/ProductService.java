@@ -109,41 +109,6 @@ public class ProductService {
         return productRepository.findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(restaurantId);
     }
 
-    @Transactional(readOnly = true)
-    public java.util.Map<Long, Long> countAvailableGroupedByRestaurant() {
-        java.util.Map<Long, Long> counts = new java.util.HashMap<>();
-        for (Object[] row : productRepository.countAvailableGroupedByRestaurant()) {
-            counts.put((Long) row[0], (Long) row[1]);
-        }
-        return counts;
-    }
-
-    @Transactional(readOnly = true)
-    public long countByRestaurant(Long restaurantId) {
-        return productRepository.countByRestaurantId(restaurantId);
-    }
-
-    @Transactional
-    public int deleteByCategoryAndRestaurant(Long categoryId, Long restaurantId) {
-        return productRepository.deleteByCategoryIdAndRestaurantId(categoryId, restaurantId);
-    }
-
-    // ------------------------------------------------------------------
-    // Inventario y recetas: delegan en ProductRecipeService (misma API).
-    // ------------------------------------------------------------------
-
-    /** Descuenta existencias por un pedido (delega en recetas/stock). */
-    @Transactional
-    public Product deductStock(Long productId, Long restaurantId, int quantity, Long orderId) {
-        return recipeService.deductStock(productId, restaurantId, quantity, orderId);
-    }
-
-    /** Devuelve existencias al cancelar un pedido (solo si rastrea stock). */
-    @Transactional
-    public void restoreStock(Long productId, Long restaurantId, int quantity, Long orderId) {
-        recipeService.restoreStock(productId, restaurantId, quantity, orderId);
-    }
-
     /** Ajuste manual a una existencia absoluta (reposición o conteo). */
     @Transactional
     public ProductResponse setStockMine(Long productId, int newQuantity, MovementReason reason) {

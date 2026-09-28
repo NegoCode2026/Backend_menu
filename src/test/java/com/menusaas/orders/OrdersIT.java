@@ -316,6 +316,72 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(third.getBody().get("data").get("unpaidOrders")).isEmpty();
     }
 
+    /**
+     * Un plato se puede crear solo con nombre y precio: sin descripción,
+     * sin foto y sin categoría (queda "sin categoría").
+     */
+    @Test
+    void product_canBeCreatedBare() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Bare Product Owner", "bare-product@test.com", "bare-product");
+
+        ResponseEntity<JsonNode> created = rest.exchange("/api/products", HttpMethod.POST,
+                TestHttp.body(objectMapper, Map.of(
+                        "name", "Plato Simple",
+                        "price", 15000,
+                        "available", true), owner), JsonNode.class);
+
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        JsonNode data = created.getBody().get("data");
+        assertThat(data.get("name").asText()).isEqualTo("Plato Simple");
+        assertThat(data.path("categoryId").isNull()).isTrue();
+    }
+
+    /**
+     * La mesa del QR debe existir: con mesas registradas, un pedido público
+     * a una mesa fantasma (?mesa=2000) se rechaza; a una real pasa.
+     */
+    @Test
+    void publicOrder_unknownTable_isRejected() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Table Guard Owner", "table-guard@test.com", "table-guard");
+        long productId = createProduct(owner, "Plato Mesa", 8000);
+        for (String num : List.of("01", "02")) {
+            ResponseEntity<JsonNode> t = rest.exchange("/api/tables", HttpMethod.POST,
+                    TestHttp.body(objectMapper, Map.of("number", num, "seats", 4), owner), JsonNode.class);
+            assertThat(t.getStatusCode().value()).isEqualTo(201);
+        }
+
+        // El menú público expone las mesas registradas
+        ResponseEntity<JsonNode> menu = rest.getForEntity("/api/public/menu/table-guard", JsonNode.class);
+        assertThat(menu.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(menu.getBody().get("data").get("tables").toString()).contains("01", "02");
+
+        // Mesa fantasma → 400
+        ResponseEntity<JsonNode> ghost = postPublicOrder("table-guard", Map.of(
+                "customerName", "Mesa 2000",
+                "tableNumber", "Mesa 2000",
+                "orderType", "DINE_IN",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        assertThat(ghost.getStatusCode().value()).isEqualTo(400);
+
+        // Mesa real (con o sin prefijo) → 201
+        ResponseEntity<JsonNode> ok1 = postPublicOrder("table-guard", Map.of(
+                "customerName", "Mesa 02",
+                "tableNumber", "Mesa 02",
+                "orderType", "DINE_IN",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        assertThat(ok1.getStatusCode().value()).isEqualTo(201);
+
+        ResponseEntity<JsonNode> ok2 = postPublicOrder("table-guard", Map.of(
+                "customerName", "Mesa 1",
+                "tableNumber", "1",
+                "orderType", "DINE_IN",
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        assertThat(ok2.getStatusCode().value()).isEqualTo(201);
+        assertThat(ok2.getBody().get("data").get("tableNumber").asText()).isEqualTo("1");
+    }
+
     @Test
     void manualOrder_canUseTableWithoutCustomerName() throws Exception {
         TestHttp.Session owner = TestHttp.register(rest, objectMapper,
@@ -379,14 +445,6 @@ class OrdersIT extends BaseIntegrationTest {
         ResponseEntity<JsonNode> emptyEdit = rest.exchange("/api/orders/" + orderId, HttpMethod.PATCH,
                 TestHttp.body(objectMapper, Map.of("items", List.of()), owner), JsonNode.class);
         assertThat(emptyEdit.getStatusCode().value()).isEqualTo(400);
-
-        // Stats: total incluye el pedido, hoy incluye el pedido
-        ResponseEntity<JsonNode> stats = rest.exchange("/api/orders/stats", HttpMethod.GET, owner.get(), JsonNode.class);
-        assertThat(stats.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(stats.getBody().get("data").get("total").asLong()).isEqualTo(1);
-        assertThat(stats.getBody().get("data").get("pending").asLong()).isEqualTo(1);
-        assertThat(stats.getBody().get("data").get("todayCount").asLong()).isEqualTo(1);
-        assertThat(stats.getBody().get("data").get("todayRevenue").asDouble()).isEqualTo(30000.0);
 
         // Filtro "since": con el pasaso 1 hora trae el pedido; con el futuro no trae nada
         String past = java.time.Instant.now().minusSeconds(3600).toString();

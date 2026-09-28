@@ -6,18 +6,15 @@ import java.time.Instant;
 
 public record TableResponse(
         Long id,
-        Long restaurantId,
         String number,
-        Integer seats,
+        int seats,
         Instant createdAt
 ) {
-    public static TableResponse from(RestaurantTable t) {
+    public static TableResponse from(RestaurantTable table) {
         return new TableResponse(
-                t.getId(),
-                t.getRestaurantId(),
-                t.getNumber(),
-                t.getSeats(),
-                t.getCreatedAt()
-        );
+                table.getId(),
+                table.getNumber(),
+                table.getSeats(),
+                table.getCreatedAt());
     }
 }

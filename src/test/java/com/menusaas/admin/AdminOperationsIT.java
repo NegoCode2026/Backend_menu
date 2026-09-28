@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menusaas.BaseIntegrationTest;
 import com.menusaas.TestHttp;
+import com.menusaas.admin.repository.AuditLogRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -30,6 +31,9 @@ class AdminOperationsIT extends BaseIntegrationTest {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Autowired
+    AuditLogRepository auditLogRepository;
 
     @Test
     void superAdmin_fullLifecycle() throws Exception {
@@ -140,11 +144,12 @@ class AdminOperationsIT extends BaseIntegrationTest {
         assertThat(missingUser.getStatusCode().value()).isEqualTo(404);
 
         // Auditoría: debe haber registro de creación del restaurante
-        ResponseEntity<JsonNode> audit = rest.exchange(
-                "/api/admin/audit?entityType=restaurant&entityId=" + restaurantId, HttpMethod.GET,
-                superAdmin.get(), JsonNode.class);
-        assertThat(audit.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(audit.getBody().get("data").get("content").toString()).contains("RESTAURANT_CREATED");
+        // (se verifica directo en BD: no hay endpoint de lectura).
+        assertThat(auditLogRepository.findAll().stream()
+                .filter(log -> "restaurant".equals(log.getEntityType())
+                        && Long.valueOf(restaurantId).equals(log.getEntityId())
+                        && "RESTAURANT_CREATED".equals(log.getAction())))
+                .isNotEmpty();
     }
 
     @Test
@@ -176,10 +181,6 @@ class AdminOperationsIT extends BaseIntegrationTest {
         ResponseEntity<JsonNode> users = rest.exchange("/api/admin/users", HttpMethod.GET,
                 regular.get(), JsonNode.class);
         assertThat(users.getStatusCode().value()).isEqualTo(403);
-
-        ResponseEntity<JsonNode> audit = rest.exchange("/api/admin/audit", HttpMethod.GET,
-                regular.get(), JsonNode.class);
-        assertThat(audit.getStatusCode().value()).isEqualTo(403);
     }
 
     private TestHttp.Session superAdminSession() throws Exception {
