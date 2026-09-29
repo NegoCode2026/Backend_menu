@@ -13,10 +13,10 @@ public class CacheConfig {
 
     @Bean
     public CacheManager cacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager("adminStats");
+        CaffeineCacheManager manager = new CaffeineCacheManager("adminStats", "publicMenu");
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(30, TimeUnit.SECONDS)
-                .maximumSize(10));
+                .maximumSize(100));
         return manager;
     }
 }

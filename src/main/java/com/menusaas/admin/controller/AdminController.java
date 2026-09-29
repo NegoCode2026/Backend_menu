@@ -4,6 +4,7 @@ import com.menusaas.admin.dto.*;
 import com.menusaas.admin.service.AdminRestaurantService;
 import com.menusaas.admin.service.AdminStatsService;
 import com.menusaas.admin.service.AdminUserService;
+import com.menusaas.admin.service.AuditService;
 import com.menusaas.shared.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +27,7 @@ public class AdminController {
     private final AdminStatsService statsService;
     private final AdminRestaurantService restaurantService;
     private final AdminUserService userService;
+    private final AuditService auditService;
 
     @Operation(summary = "Métricas globales de la plataforma (cache 30s)")
     @GetMapping("/stats")
@@ -71,5 +73,16 @@ public class AdminController {
     public ApiResponse<Void> toggleUserActive(@PathVariable Long id, @RequestParam boolean active) {
         userService.toggleUserActive(id, active);
         return ApiResponse.ok(active ? "Usuario activado" : "Usuario desactivado");
+    }
+
+    @Operation(summary = "Consultar la bitácora de auditoría (?actorEmail=&action=&entityType=&entityId=&page=&size=)")
+    @GetMapping("/audit")
+    public ApiResponse<Page<AuditLogResponse>> listAudit(
+            @RequestParam(required = false) String actorEmail,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) Long entityId,
+            @PageableDefault(size = 20, sort = "id", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.ok(auditService.list(actorEmail, action, entityType, entityId, pageable));
     }
 }

@@ -11,6 +11,7 @@ import com.menusaas.products.repository.ProductRepository;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public ProductResponse createMine(ProductRequest request) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         validateCategoryBelongsToTenant(request.categoryId(), restaurantId);
@@ -63,6 +65,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public ProductResponse updateMine(Long id, ProductRequest request) {
         Product product = findScoped(id);
         validateCategoryBelongsToTenant(request.categoryId(), product.getRestaurantId());
@@ -82,6 +85,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public void deleteMine(Long id) {
         Product product = findScoped(id);
         productRepository.delete(product);

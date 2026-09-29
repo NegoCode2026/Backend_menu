@@ -144,12 +144,20 @@ class AdminOperationsIT extends BaseIntegrationTest {
         assertThat(missingUser.getStatusCode().value()).isEqualTo(404);
 
         // Auditoría: debe haber registro de creación del restaurante
-        // (se verifica directo en BD: no hay endpoint de lectura).
         assertThat(auditLogRepository.findAll().stream()
                 .filter(log -> "restaurant".equals(log.getEntityType())
                         && Long.valueOf(restaurantId).equals(log.getEntityId())
                         && "RESTAURANT_CREATED".equals(log.getAction())))
                 .isNotEmpty();
+
+        // Lectura de la bitácora por API (filtros por acción y entidad)
+        ResponseEntity<JsonNode> audit = rest.exchange(
+                "/api/admin/audit?action=RESTAURANT_CREATED&entityType=restaurant&entityId=" + restaurantId,
+                HttpMethod.GET, superAdmin.get(), JsonNode.class);
+        assertThat(audit.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(audit.getBody().get("data").get("content").size()).isGreaterThanOrEqualTo(1);
+        assertThat(audit.getBody().get("data").get("content").get(0).get("actorEmail").asText())
+                .isEqualTo("superadmin@demo.com");
     }
 
     @Test

@@ -99,7 +99,7 @@ public class AdminRestaurantService {
         return planNames.getOrDefault(sub.getPlanId(), "Sin plan");
     }
 
-    @CacheEvict(value = "adminStats", allEntries = true)
+    @CacheEvict(value = {"adminStats", "publicMenu"}, allEntries = true)
     @Transactional
     public AdminRestaurantResponse createRestaurant(AdminCreateRestaurantRequest request) {
         String email = request.adminEmail().trim().toLowerCase();
@@ -160,7 +160,7 @@ public class AdminRestaurantService {
         );
     }
 
-    @CacheEvict(value = "adminStats", allEntries = true)
+    @CacheEvict(value = {"adminStats", "publicMenu"}, allEntries = true)
     @Transactional
     public void toggleRestaurantActive(Long id, boolean active) {
         Restaurant restaurant = restaurantRepository.findById(id)

@@ -4,12 +4,14 @@ import com.menusaas.categories.entity.Category;
 import com.menusaas.categories.service.CategoryService;
 import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.publicmenu.dto.PublicMenuResponse;
+import com.menusaas.publicmenu.dto.PublicRestaurantResponse;
 import com.menusaas.products.entity.Product;
 import com.menusaas.products.service.ProductService;
 import com.menusaas.restaurants.entity.Restaurant;
 import com.menusaas.restaurants.service.RestaurantService;
 import com.menusaas.tables.service.TableService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,16 @@ public class PublicMenuService {
     private final SignedUrlService signedUrlService;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "publicMenu", key = "'listRestaurants'", unless = "#result == null")
+    public List<PublicRestaurantResponse> listRestaurants() {
+        return restaurantService.listActivePublic().stream()
+                .map(r -> PublicRestaurantResponse.from(
+                        r, signedUrlService.toSignedUrlOrNull(r.getLogoUrl())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "publicMenu", key = "#slug", unless = "#result == null")
     public PublicMenuResponse getBySlug(String slug) {
         Restaurant restaurant = restaurantService.findActiveBySlugOrThrow(slug);
 

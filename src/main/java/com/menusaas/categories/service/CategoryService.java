@@ -8,6 +8,7 @@ import com.menusaas.shared.api.ConflictException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public CategoryResponse createMine(CategoryRequest request) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         if (categoryRepository.existsByRestaurantIdAndNameIgnoreCase(restaurantId, request.name().trim())) {
@@ -51,6 +53,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public CategoryResponse updateMine(Long id, CategoryRequest request) {
         Category category = findScoped(id);
         if (!category.getName().equalsIgnoreCase(request.name().trim())
@@ -65,6 +68,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public void deleteMine(Long id) {
         Category category = findScoped(id);
         categoryRepository.delete(category);

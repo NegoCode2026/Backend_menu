@@ -561,6 +561,62 @@ class OrdersIT extends BaseIntegrationTest {
         return product.getBody().get("data").get("id").asLong();
     }
 
+    /**
+     * El directorio público lista solo restaurantes activos, sin exponer
+     * datos sensibles.
+     */
+    @Test
+    void publicDirectory_listsActiveRestaurantsOnly() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Dirc Owner", "dirc-owner@test.com", "dirc-owner");
+
+        ResponseEntity<JsonNode> all = rest.getForEntity("/api/public/restaurants", JsonNode.class);
+        assertThat(all.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(all.getBody().get("data").toString()).contains("dirc-owner");
+
+        // La tarjeta pública no expone campos internos
+        for (JsonNode r : all.getBody().get("data")) {
+            assertThat(r.has("userCount")).isFalse();
+            assertThat(r.has("planName")).isFalse();
+            assertThat(r.has("adminEmail")).isFalse();
+        }
+    }
+
+    /**
+     * El menú público se cachea (Caffeine, TTL corto); un cambio de precio en el
+     * producto invalida la caché y la siguiente lectura lo refleja.
+     */
+    @Test
+    void publicMenu_isCached_andEvictedOnProductUpdate() throws Exception {
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Cache Owner", "cache-owner@test.com", "cache-owner");
+        long productId = createProduct(owner, "Plato Cache", 10000);
+
+        // Lectura inicial: el precio se ve en el menú público
+        String slug = "cache-owner";
+        ResponseEntity<JsonNode> first = rest.getForEntity("/api/public/menu/" + slug, JsonNode.class);
+        assertThat(first.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(first.getBody().get("data").get("categories").toString()).contains("Plato Cache");
+
+        // Segunda lectura sin cambios: mismo contenido (viene del caché o recalculado, debe ser igual)
+        ResponseEntity<JsonNode> second = rest.getForEntity("/api/public/menu/" + slug, JsonNode.class);
+        assertThat(second.getBody().get("data").toString()).isEqualTo(first.getBody().get("data").toString());
+
+        // Cambio de precio por el tenant → la caché del menú público se invalida
+        ResponseEntity<JsonNode> updated = rest.exchange("/api/products/" + productId, HttpMethod.PUT,
+                TestHttp.body(objectMapper, Map.of(
+                        "categoryId", first.getBody().get("data").get("categories").get(0).get("id").asLong(),
+                        "name", "Plato Cache",
+                        "price", 15000,
+                        "available", true), owner), JsonNode.class);
+        assertThat(updated.getStatusCode().is2xxSuccessful()).isTrue();
+
+        // La siguiente lectura del menú público ya muestra el nuevo precio
+        ResponseEntity<JsonNode> after = rest.getForEntity("/api/public/menu/" + slug, JsonNode.class);
+        assertThat(after.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(after.getBody().get("data").toString()).contains("15000");
+    }
+
     private ResponseEntity<JsonNode> postPublicOrder(String slug, Map<String, Object> body) {
         HttpEntity<String> entity = new HttpEntity<>(json(body), jsonHeaders());
         return rest.postForEntity("/api/public/orders/" + slug, entity, JsonNode.class);

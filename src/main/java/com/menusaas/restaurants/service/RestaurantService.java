@@ -10,6 +10,7 @@ import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.users.entity.Role;
 import com.menusaas.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ public class RestaurantService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public RestaurantResponse updateMine(RestaurantRequest request) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         Restaurant restaurant = findByIdOrThrow(restaurantId);
@@ -38,6 +40,7 @@ public class RestaurantService {
     }
 
     @Transactional
+    @CacheEvict(value = "publicMenu", allEntries = true)
     public RestaurantResponse setOpenMine(boolean open) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
         Restaurant restaurant = findByIdOrThrow(restaurantId);
@@ -80,6 +83,14 @@ public class RestaurantService {
     @Transactional(readOnly = true)
     public Restaurant getReferenceById(Long id) {
         return restaurantRepository.getReferenceById(id);
+    }
+
+    /** Directorio público: restaurantes activos, ordenados por creación. */
+    @Transactional(readOnly = true)
+    public java.util.List<Restaurant> listActivePublic() {
+        return restaurantRepository.findAllByOrderByIdDesc().stream()
+                .filter(Restaurant::isActive)
+                .toList();
     }
 
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {

@@ -1,5 +1,6 @@
 package com.menusaas.files;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menusaas.BaseIntegrationTest;
 import com.menusaas.TestHttp;
@@ -101,5 +102,59 @@ class SecurityFilesIT extends BaseIntegrationTest {
                 "/api/public/files/../secret?exp=9999999999&sig=abc", String.class);
 
         assertThat(response.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void upload_requiresAuth_andAcceptsImage() throws Exception {
+        TestHttp.bootstrapCsrf(rest);
+        TestHttp.Session session = TestHttp.register(rest, objectMapper,
+                "Upload Owner", "upload-owner@test.com", "upload-owner");
+
+        MockMultipartFile png = new MockMultipartFile("file", "menu.png", "image/png", PNG_BYTES);
+        var body = new org.springframework.util.LinkedMultiValueMap<String, Object>();
+        body.add("file", new org.springframework.core.io.ByteArrayResource(png.getBytes()) {
+            @Override
+            public String getFilename() {
+                return png.getOriginalFilename();
+            }
+        });
+
+        org.springframework.http.HttpHeaders multipart = new org.springframework.http.HttpHeaders();
+        multipart.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        multipart.add(TestHttp.HEADER_XSRF, session.xsrfToken());
+        multipart.add(org.springframework.http.HttpHeaders.COOKIE,
+                TestHttp.COOKIE_ACCESS + "=" + session.accessToken()
+                        + "; " + TestHttp.COOKIE_REFRESH + "=" + session.refreshToken()
+                        + "; " + TestHttp.COOKIE_XSRF + "=" + session.xsrfToken());
+        org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> multipartEntity =
+                new org.springframework.http.HttpEntity<>(body, multipart);
+
+        ResponseEntity<JsonNode> uploaded = rest.exchange("/api/files/upload",
+                org.springframework.http.HttpMethod.POST, multipartEntity, JsonNode.class);
+        assertThat(uploaded.getStatusCode().value()).isEqualTo(201);
+        String fileId = uploaded.getBody().get("data").get("fileId").asText();
+        assertThat(fileId).matches("[0-9a-f-]{36}\\.png");
+        assertThat(uploaded.getBody().get("data").get("url").asText()).contains("/api/public/files/" + fileId);
+    }
+
+    @Test
+    void upload_withoutAuth_isUnauthorized() throws Exception {
+        MockMultipartFile png = new MockMultipartFile("file", "menu.png", "image/png", PNG_BYTES);
+        var body = new org.springframework.util.LinkedMultiValueMap<String, Object>();
+        body.add("file", new org.springframework.core.io.ByteArrayResource(png.getBytes()) {
+            @Override
+            public String getFilename() {
+                return png.getOriginalFilename();
+            }
+        });
+        org.springframework.http.HttpHeaders multipart = new org.springframework.http.HttpHeaders();
+        multipart.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> entity =
+                new org.springframework.http.HttpEntity<>(body, multipart);
+
+        ResponseEntity<JsonNode> response = rest.exchange("/api/files/upload",
+                org.springframework.http.HttpMethod.POST, entity, JsonNode.class);
+        // 401 (no autenticado) o 403 (rechazo CSRF): en ambos casos se bloquea
+        assertThat(response.getStatusCode().value()).isIn(401, 403);
     }
 }

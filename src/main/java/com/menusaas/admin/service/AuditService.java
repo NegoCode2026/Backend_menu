@@ -1,10 +1,13 @@
 package com.menusaas.admin.service;
 
+import com.menusaas.admin.dto.AuditLogResponse;
 import com.menusaas.admin.entity.AuditLog;
 import com.menusaas.admin.repository.AuditLogRepository;
 import com.menusaas.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
+
+    public Page<AuditLogResponse> list(String actorEmail, String action, String entityType,
+                                       Long entityId, Pageable pageable) {
+        return auditLogRepository.search(actorEmail, action, entityType, entityId, pageable)
+                .map(AuditLogResponse::from);
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String action, String entityType, Long entityId, String detail) {        try {
