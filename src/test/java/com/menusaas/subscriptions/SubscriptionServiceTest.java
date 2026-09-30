@@ -243,6 +243,67 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void activateFromGateway_withoutPeriodFromGateway_setsEndsAtSoTheSubscriptionCanExpire() {
+        when(planRepository.findByCode("PRO")).thenReturn(Optional.of(plan("PRO", "29900")));
+        when(subscriptionRepository.findByRestaurantIdAndStatusInOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> {
+            Subscription s = inv.getArgument(0);
+            s.setId(22L);
+            return s;
+        });
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan("PRO", "29900")));
+
+        Instant before = Instant.now();
+        // ePayco no manda periodo (periodEnd = null): la suscripción quedaría
+        // con ends_at NULL y el job de expiración no la cerraría nunca.
+        SubscriptionResponse response = service.activateFromGateway(
+                1L, "PRO", "sub_noperiod", null);
+
+        assertThat(response.endsAt()).isNotNull();
+        assertThat(response.endsAt()).isAfter(before.plusSeconds(29L * 86400));
+        verify(subscriptionRepository, times(1)).save(any(Subscription.class));
+    }
+
+    @Test
+    void activateFromGateway_gatewayPeriodWins_overDerivedEndsAt() {
+        when(planRepository.findByCode("PRO")).thenReturn(Optional.of(plan("PRO", "29900")));
+        when(subscriptionRepository.findByRestaurantIdAndStatusInOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> {
+            Subscription s = inv.getArgument(0);
+            s.setId(23L);
+            return s;
+        });
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan("PRO", "29900")));
+
+        Instant gatewayPeriodEnd = Instant.now().plusSeconds(7L * 86400);
+        SubscriptionResponse response = service.activateFromGateway(
+                1L, "PRO", "sub_period", gatewayPeriodEnd);
+
+        assertThat(response.endsAt()).isEqualTo(gatewayPeriodEnd);
+    }
+
+    @Test
+    void activateFromGateway_freePlan_hasNoExpiry() {
+        when(planRepository.findByCode("FREE")).thenReturn(Optional.of(plan("FREE", "0")));
+        when(subscriptionRepository.findByRestaurantIdAndStatusInOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> {
+            Subscription s = inv.getArgument(0);
+            s.setId(24L);
+            return s;
+        });
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan("FREE", "0")));
+
+        // Plan gratuito: sin caducidad, igual que el alta manual.
+        SubscriptionResponse response = service.activateFromGateway(
+                1L, "FREE", "sub_free", null);
+
+        assertThat(response.endsAt()).isNull();
+    }
+
+    @Test
     void getMySubscription_withoutActive_throws404() {        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(subscriptionRepository.findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(1L, Subscription.STATUS_ACTIVE))

@@ -36,6 +36,12 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SubscriptionService {
 
+    /**
+     * Vigencia por defecto de un plan pagado cuando la pasarela no informa el
+     * periodo (ePayco no lo envía en el webhook).
+     */
+    private static final long PAID_PERIOD_DAYS = 30L;
+
     private final SubscriptionRepository subscriptionRepository;
     private final PlanRepository planRepository;
     private final PaymentGateway paymentGateway;
@@ -175,9 +181,30 @@ public class SubscriptionService {
                 .provider(Subscription.PROVIDER_EPAYCO)
                 .providerReference(providerReference)
                 .startsAt(Instant.now())
-                .endsAt(periodEnd)
+                .endsAt(resolveEndsAt(plan, periodEnd))
                 .build();
         return toResponse(subscriptionRepository.save(subscription));
+    }
+
+    /**
+     * Fecha de fin de vigencia.
+     *
+     * <p>Si la pasarela manda su propio periodo se respeta. Si no lo manda
+     * (ePayco no lo incluye en el webhook) se deriva del plan, porque
+     * {@code ends_at} en NULL nunca cumple {@code endsAtBefore} y la
+     * suscripción quedaría ACTIVE para siempre: el job de expiración no la
+     * cerraría y un restaurante que deja de pagar conservaría el acceso.
+     *
+     * <p>Un plan gratuito (precio 0) queda sin caducidad, igual que en el
+     * alta manual.
+     */
+    private Instant resolveEndsAt(Plan plan, Instant periodEnd) {
+        if (periodEnd != null) {
+            return periodEnd;
+        }
+        return plan.getPriceMonthly() != null && plan.getPriceMonthly().signum() > 0
+                ? Instant.now().plusSeconds(PAID_PERIOD_DAYS * 86400)
+                : null;
     }
 
     /**
@@ -249,7 +276,7 @@ public class SubscriptionService {
                 .provider(provider)
                 .providerReference(providerReference)
                 .startsAt(Instant.now())
-                .endsAt(plan.getPriceMonthly().signum() > 0 ? Instant.now().plusSeconds(30L * 86400) : null)
+                .endsAt(resolveEndsAt(plan, null))
                 .build();
         return toResponse(subscriptionRepository.save(subscription));
     }
