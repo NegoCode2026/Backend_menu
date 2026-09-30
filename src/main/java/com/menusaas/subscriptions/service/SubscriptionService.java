@@ -19,8 +19,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Ciclo de vida de suscripciones:
@@ -115,16 +117,51 @@ public class SubscriptionService {
 
     /**
      * Confirma una suscripción desde la pasarela (webhook checkout.session.completed).
+     * Sin validación de importe.
+     */
+    public SubscriptionResponse activateFromGateway(Long restaurantId, String planCode,
+                                                    String providerReference, Instant periodEnd) {
+        return activateFromGateway(restaurantId, planCode, providerReference, periodEnd, null);
+    }
+
+    /**
+     * Confirma una suscripción desde la pasarela (webhook checkout.session.completed).
+     *
+     * <p>Idempotente por {@code providerReference}: la pasarela reintenta el
+     * webhook y un replay del mismo {@code ref_payco} no debe volver a activar
+     * (ni a cancelar la suscripción previa) ni crear un segundo registro.
+     *
+     * <p>Si la pasarela reporta el importe ({@code amount}), se contrasta con el
+     * precio del plan: un desajuste se rechaza en vez de dar acceso por un pago
+     * de otro valor.
      */
     @Transactional
     public SubscriptionResponse activateFromGateway(Long restaurantId, String planCode,
-                                                    String providerReference, Instant periodEnd) {
+                                                    String providerReference, Instant periodEnd,
+                                                    BigDecimal amount) {
         if (restaurantId == null || planCode == null) {
             throw new BadRequestException("Webhook sin datos de restaurante/plan");
         }
+
+        // Anti-replay: si esta referencia ya se procesó, no se toca nada.
+        if (providerReference != null && !providerReference.isBlank()) {
+            Optional<Subscription> already = subscriptionRepository.findByProviderReference(providerReference);
+            if (already.isPresent()) {
+                log.info("Webhook ePayco ya procesado (ref={}), se ignora el replay", providerReference);
+                return toResponse(already.get());
+            }
+        }
+
         Plan plan = planRepository.findByCode(planCode)
                 .filter(Plan::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Plan no encontrado en el webhook"));
+
+        if (amount != null && plan.getPriceMonthly() != null
+                && amount.compareTo(plan.getPriceMonthly()) != 0) {
+            log.error("Importe ePayco no coincide con el plan: ref={}, plan={}, cobrado={}, esperado={}",
+                    providerReference, planCode, amount, plan.getPriceMonthly());
+            throw new BadRequestException("El importe del pago no corresponde al plan contratado");
+        }
 
         // Cancela cualquier suscripción activa/pendiente previa del restaurante.
         subscriptionRepository.findByRestaurantIdAndStatusInOrderByCreatedAtDesc(
@@ -155,7 +192,8 @@ public class SubscriptionService {
         switch (event.type()) {
             case PaymentGateway.PaymentEvent.TYPE_CHECKOUT_COMPLETED ->
                     activateFromGateway(
-                            event.restaurantId(), event.planCode(), event.providerReference(), event.periodEnd());
+                            event.restaurantId(), event.planCode(), event.providerReference(),
+                            event.periodEnd(), event.amount());
             case PaymentGateway.PaymentEvent.TYPE_SUBSCRIPTION_CANCELLED ->
                     cancelFromGateway(event.restaurantId(), event.providerReference());
             default -> {

@@ -52,6 +52,13 @@ app:
   rate-limiting:
     # Máximo de peticiones por minuto a /api/auth/login, register y refresh (por IP).
     auth-max-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
+    # Máximo de peticiones por minuto al crear pedidos públicos (por IP).
+    public-orders-max-per-minute: ${PUBLIC_ORDERS_RATE_LIMIT_PER_MINUTE:10}
+  flyway:
+    # repair() realinea checksums y borra entradas fallidas. Apagado por
+    # defecto: encender SOLO durante el deploy que lo necesita
+    # (FLYWAY_REPAIR_ON_START=true) y apagar en el siguiente.
+    repair-on-start: ${FLYWAY_REPAIR_ON_START:false}
   payments:
     # Pasarela de pagos: ePayco Smart Checkout v2.
     # Si no se configuran las claves, el sistema opera en modo manual (solo dev/pruebas).

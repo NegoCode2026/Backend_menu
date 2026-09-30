@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -516,6 +517,18 @@ class OrdersIT extends BaseIntegrationTest {
             last = postPublicOrder("rate-limited", Map.of());
         }
         assertThat(last.getStatusCode().value()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+
+        // El 429 debe cumplir el mismo contrato que el resto de errores de la API
+        // (message, code, status, timestamp, fieldErrors).
+        JsonNode error = last.getBody();
+        assertThat(error.get("code").asText()).isEqualTo("TOO_MANY_REQUESTS");
+        assertThat(error.get("status").asInt()).isEqualTo(429);
+        assertThat(error.get("message").asText()).isNotBlank();
+        assertThat(error.get("timestamp").asText()).isNotBlank();
+        assertThat(error.has("fieldErrors")).isTrue();
+
+        // RFC 6585: el cliente debe saber cuánto esperar.
+        assertThat(last.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("60");
     }
 
     @Test

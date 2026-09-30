@@ -1,11 +1,15 @@
 package com.menusaas.shared.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.menusaas.shared.api.ErrorResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -30,14 +34,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final String PUBLIC_ORDERS_PREFIX = "/api/public/orders/";
 
+    /** Coincide con la ventana fija de {@link RateLimiter} (60s). */
+    private static final long RETRY_AFTER_SECONDS = 60L;
+
     private final RateLimiter rateLimiter;
+    private final ObjectMapper objectMapper;
     private final int maxPerMinute;
     private final int publicOrdersMaxPerMinute;
 
     public RateLimitFilter(RateLimiter rateLimiter,
+                           ObjectMapper objectMapper,
                            @Value("${app.rate-limiting.auth-max-per-minute:20}") int maxPerMinute,
                            @Value("${app.rate-limiting.public-orders-max-per-minute:10}") int publicOrdersMaxPerMinute) {
         this.rateLimiter = rateLimiter;
+        this.objectMapper = objectMapper;
         this.maxPerMinute = maxPerMinute;
         this.publicOrdersMaxPerMinute = publicOrdersMaxPerMinute;
     }
@@ -69,10 +79,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         if (rateLimiter.isLimited(key, limit)) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.setContentType("application/json");
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            response.getWriter().write(
-                    "{\"status\":429,\"code\":\"TOO_MANY_REQUESTS\",\"message\":\"Demasiadas solicitudes. Intenta de nuevo en un minuto.\"}");
+            // RFC 6585: el cliente debe saber cuánto esperar.
+            response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(RETRY_AFTER_SECONDS));
+            ErrorResponse body = ErrorResponse.of(
+                    HttpStatus.TOO_MANY_REQUESTS.value(),
+                    "TOO_MANY_REQUESTS",
+                    "Demasiadas solicitudes. Intenta de nuevo en un minuto.",
+                    null);
+            objectMapper.writeValue(response.getWriter(), body);
             return;
         }
         chain.doFilter(request, response);

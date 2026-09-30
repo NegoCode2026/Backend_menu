@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -127,7 +128,8 @@ public class EpaycoPaymentGateway implements PaymentGateway {
                     refPayco,
                     restaurantId,
                     planCode,
-                    null
+                    null,
+                    parseAmount(xAmount)
             );
             case "Rechazada", "Fallida" -> {
                 log.warn("Pago ePayco rechazado/fallido: ref={}, response={}, motivo={}",
@@ -222,6 +224,23 @@ public class EpaycoPaymentGateway implements PaymentGateway {
             return HexFormat.of().formatHex(hash);
         } catch (Exception ex) {
             throw new IllegalStateException("Error calculando SHA-256", ex);
+        }
+    }
+
+    /**
+     * Importe cobrado reportado por ePayco. null si no viene o no es numérico:
+     * en ese caso el servicio omite la validación contra el precio del plan.
+     */
+    private BigDecimal parseAmount(String xAmount) {
+        if (xAmount == null || xAmount.isBlank()) {
+            log.warn("Webhook ePayco sin x_amount: no se podrá validar el importe");
+            return null;
+        }
+        try {
+            return new BigDecimal(xAmount.trim());
+        } catch (NumberFormatException ex) {
+            log.warn("x_amount no numérico en webhook ePayco: {}", xAmount);
+            return null;
         }
     }
 

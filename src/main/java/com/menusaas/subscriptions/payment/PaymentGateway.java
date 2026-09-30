@@ -2,6 +2,7 @@ package com.menusaas.subscriptions.payment;
 
 import com.menusaas.subscriptions.entity.Plan;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -26,9 +27,22 @@ public interface PaymentGateway {
     record CheckoutSession(String sessionId, String token) {
     }
 
-    record PaymentEvent(String type, String providerReference, Long restaurantId, String planCode, Instant periodEnd) {
+    /**
+     * Evento de pago ya verificado por la pasarela.
+     *
+     * @param amount importe cobrado, tal como lo reportó la pasarela. Se
+     *               contrasta contra el precio del plan: null si la pasarela
+     *               no lo envía, en cuyo caso no se valida.
+     */
+    record PaymentEvent(String type, String providerReference, Long restaurantId, String planCode,
+                        Instant periodEnd, BigDecimal amount) {
 
         public static final String TYPE_CHECKOUT_COMPLETED = "CHECKOUT_COMPLETED";
         public static final String TYPE_SUBSCRIPTION_CANCELLED = "SUBSCRIPTION_CANCELLED";
+
+        public PaymentEvent(String type, String providerReference, Long restaurantId, String planCode,
+                            Instant periodEnd) {
+            this(type, providerReference, restaurantId, planCode, periodEnd, null);
+        }
     }
 }

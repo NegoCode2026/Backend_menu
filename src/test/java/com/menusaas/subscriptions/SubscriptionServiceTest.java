@@ -1,6 +1,7 @@
 package com.menusaas.subscriptions;
 
 import com.menusaas.config.AppProperties;
+import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
 import com.menusaas.subscriptions.dto.SubscribeResult;
@@ -185,8 +186,64 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void getMySubscription_withoutActive_throws404() {
-        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+    void activateFromGateway_replayedWebhook_isIgnoredAndDoesNotCreateASecondSubscription() {
+        Subscription already = Subscription.builder()
+                .id(7L)
+                .restaurantId(1L)
+                .planId(1L)
+                .status(Subscription.STATUS_ACTIVE)
+                .provider(Subscription.PROVIDER_EPAYCO)
+                .providerReference("sub_replay")
+                .startsAt(Instant.now())
+                .endsAt(Instant.now().plusSeconds(86400))
+                .build();
+        when(subscriptionRepository.findByProviderReference("sub_replay"))
+                .thenReturn(Optional.of(already));
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan("PRO", "29900")));
+
+        SubscriptionResponse response = service.activateFromGateway(
+                1L, "PRO", "sub_replay", Instant.now().plusSeconds(86400), new BigDecimal("29900"));
+
+        // Idempotente: devuelve la suscripción ya procesada y no inserta nada nuevo.
+        assertThat(response.status()).isEqualTo(Subscription.STATUS_ACTIVE);
+        verify(subscriptionRepository, never()).save(any());
+        verify(planRepository, never()).findByCode(any());
+    }
+
+    @Test
+    void activateFromGateway_amountDoesNotMatchPlan_throwsAndDoesNotActivate() {
+        when(planRepository.findByCode("PRO")).thenReturn(Optional.of(plan("PRO", "29900")));
+
+        assertThatThrownBy(() -> service.activateFromGateway(
+                1L, "PRO", "sub_bad", Instant.now().plusSeconds(86400), new BigDecimal("1")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("importe");
+
+        verify(subscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void activateFromGateway_matchingAmount_activates() {
+        when(planRepository.findByCode("PRO")).thenReturn(Optional.of(plan("PRO", "29900")));
+        when(subscriptionRepository.findByRestaurantIdAndStatusInOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> {
+            Subscription s = inv.getArgument(0);
+            s.setId(21L);
+            return s;
+        });
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan("PRO", "29900")));
+
+        // Escala distinta ("29900.00" vs "29900") pero mismo importe: debe validar.
+        SubscriptionResponse response = service.activateFromGateway(
+                1L, "PRO", "sub_ok", Instant.now().plusSeconds(86400), new BigDecimal("29900.00"));
+
+        assertThat(response.status()).isEqualTo(Subscription.STATUS_ACTIVE);
+        verify(subscriptionRepository, times(1)).save(any(Subscription.class));
+    }
+
+    @Test
+    void getMySubscription_withoutActive_throws404() {        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             when(subscriptionRepository.findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(1L, Subscription.STATUS_ACTIVE))
                     .thenReturn(Optional.empty());
