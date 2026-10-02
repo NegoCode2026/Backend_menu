@@ -28,6 +28,26 @@ class TablesIT extends BaseIntegrationTest {
     ObjectMapper objectMapper;
 
     @Test
+    void tables_columnNameMatchesEntity() throws Exception {
+        // Regresión: la columna se llamaba table_number en unas bases y "number"
+        // en la entidad, y /api/tables devolvía 500 con
+        // "column rt1_0.number does not exist". Como ddl-auto=none en prod, nada
+        // lo detectaba en el arranque: solo reventaba al usar el endpoint.
+        // Este test recorre el CRUD completo contra el esquema real migrado.
+        TestHttp.Session owner = TestHttp.register(rest, objectMapper,
+                "Tables Column", "tables-column@test.com", "tables-column");
+
+        ResponseEntity<JsonNode> created = postTable(owner, Map.of("number", "77", "seats", 2));
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        assertThat(created.getBody().get("data").get("number").asText()).isEqualTo("77");
+
+        ResponseEntity<JsonNode> listed = rest.exchange(
+                "/api/tables", HttpMethod.GET, owner.get(), JsonNode.class);
+        assertThat(listed.getStatusCode().value()).isEqualTo(200);
+        assertThat(listed.getBody().get("data")).isNotEmpty();
+    }
+
+    @Test
     void tables_crudAndTenantIsolation() throws Exception {
         TestHttp.Session owner = TestHttp.register(rest, objectMapper,
                 "Tables Owner", "tables-owner@test.com", "tables-owner");

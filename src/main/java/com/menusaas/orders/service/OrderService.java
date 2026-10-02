@@ -207,6 +207,16 @@ public class OrderService {
         return withHistory(updated);
     }
 
+    /**
+     * Tope de pedidos que devuelve el listado sin paginar de forma explícita.
+     * Antes devolvía TODOS los pedidos históricos del restaurante y, por el N+1
+     * de items, eso eran 2+N queries. El corte es alto a propósito para no
+     * esconder pedidos en uso en un restaurante, pero acotado: si se alcanza, se
+     * avisa en el log para que el salto sea visible y no silencioso.
+     */
+    static final int DEFAULT_LIST_SIZE = 200;
+    static final int MAX_LIST_SIZE = 500;
+
     @Transactional(readOnly = true)
     public List<OrderResponse> listMine(OrderStatus status, Instant since, Integer page, Integer size) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
@@ -223,14 +233,26 @@ public class OrderService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        // created_at puede repetir (varios pedidos en el mismo instante), así que
+        // se desempata por id: sin el, LIMIT/OFFSET puede repetir o saltar filas
+        // entre páginas, visible para el usuario en un listado que cambia solo.
+        Sort sort = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
         List<Order> orders;
 
-        if (page != null && size != null) {
-            Page<Order> result = orderRepository.findAll(spec, PageRequest.of(page, size, sort));
-            orders = result.getContent();
-        } else {
-            orders = orderRepository.findAll(spec, sort);
+        int effectivePage = page != null && page >= 0 ? page : 0;
+        int requested = size != null && size > 0 ? size : DEFAULT_LIST_SIZE;
+        int effectiveSize = Math.min(requested, MAX_LIST_SIZE);
+
+        Page<Order> result = orderRepository.findAll(spec, PageRequest.of(effectivePage, effectiveSize, sort));
+        orders = result.getContent();
+
+        // Corte observable: si la página está llena puede haber más pedidos que
+        // el cliente no está viendo, y eso debe poder detectarse en producción.
+        if (result.getTotalElements() > (long) effectivePage * effectiveSize + orders.size()) {
+            log.warn("Listado de pedidos truncado: {}+ pedidos no devueltos (página={}, size={}, total={}). "
+                            + "El panel de pedidos necesita paginación real.",
+                    result.getTotalElements() - ((long) effectivePage * effectiveSize + orders.size()),
+                    effectivePage, effectiveSize, result.getTotalElements());
         }
 
         return withHistory(orders);

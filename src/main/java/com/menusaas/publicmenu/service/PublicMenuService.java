@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Menú público: sin autenticación, identificado por slug.
@@ -50,10 +51,20 @@ public class PublicMenuService {
 
         List<Category> categories = categoryService.findActiveByRestaurantId(restaurant.getId());
 
+        // Una sola query de productos y agrupación en memoria. Antes se
+        // consultaba categoría por categoría: 1+N queries en el endpoint público
+        // de más tráfico, y el N se dispara con cada categoría que añade el
+        // restaurante.
+        List<Product> available = productService.findAvailableByRestaurantId(restaurant.getId());
+
+        Map<Long, List<Product>> byCategory = available.stream()
+                .filter(p -> p.getCategoryId() != null)
+                .collect(java.util.stream.Collectors.groupingBy(Product::getCategoryId));
+
         List<PublicMenuResponse.CategoryInfo> categoryInfos = categories.stream()
                 .map(category -> {
-                    List<PublicMenuResponse.ProductInfo> products = productService
-                            .findAvailableByCategory(category.getId(), restaurant.getId())
+                    List<PublicMenuResponse.ProductInfo> products = byCategory
+                            .getOrDefault(category.getId(), List.of())
                             .stream()
                             .map(this::toProductInfo)
                             .toList();
@@ -61,11 +72,10 @@ public class PublicMenuService {
                 })
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
 
-        // Productos sin categoría: grupo final "Sin categoría".
-        List<PublicMenuResponse.ProductInfo> loose = productService
-                .findUncategorized(restaurant.getId())
-                .stream()
-                .filter(Product::isAvailable)
+        // Productos sin categoría: grupo final "Sin categoría". Salen del mismo
+        // fetch, así que no cuesta una query extra.
+        List<PublicMenuResponse.ProductInfo> loose = available.stream()
+                .filter(p -> p.getCategoryId() == null)
                 .map(this::toProductInfo)
                 .toList();
         if (!loose.isEmpty()) {

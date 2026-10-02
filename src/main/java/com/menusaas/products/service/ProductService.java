@@ -108,6 +108,16 @@ public class ProductService {
         return productRepository.findByCategoryScoped(categoryId, restaurantId, true);
     }
 
+    /**
+     * Productos disponibles del restaurante, todos en una sola query. El menú
+     * público los agrupa por categoría en memoria en lugar de preguntar categoría
+     * por categoría (que eran 1+N queries por cada visita a la página pública).
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<Product> findAvailableByRestaurantId(Long restaurantId) {
+        return productRepository.findAvailableByRestaurantId(restaurantId);
+    }
+
     @Transactional(readOnly = true)
     public java.util.List<Product> findUncategorized(Long restaurantId) {
         return productRepository.findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(restaurantId);

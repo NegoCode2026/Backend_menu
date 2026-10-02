@@ -34,6 +34,19 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /**
      * Conteo de productos agrupado por restaurante (panel admin: evita N+1).
      */
+    /**
+     * Todos los productos del restaurante en UNA query, para agruparlos por
+     * categoría en memoria. Evita el N+1 de consultar categoría por categoría que
+     * suffer el menú público (el endpoint de más tráfico, sin autenticar).
+     */
+    @Query("""
+            select p from Product p
+            where p.restaurantId = :restaurantId
+              and p.available = true
+            order by p.position asc, p.name asc
+            """)
+    List<Product> findAvailableByRestaurantId(@Param("restaurantId") Long restaurantId);
+
     @Query("select p.restaurantId, count(p) from Product p where p.restaurantId in :ids group by p.restaurantId")
     List<Object[]> countGroupedByRestaurantIds(@Param("ids") java.util.Collection<Long> ids);
 }

@@ -19,8 +19,22 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+        # Agrupa en lotes las cargas de colecciones LAZY. Sin esto, mapear N
+        # pedidos a su DTO emitía un SELECT por pedido (y uno por categoría en el
+        # menú público). Con el valor en 100, N pedidos cuestan ceil(N/100)+1.
+        # No se usa join fetch a propósito: combinado con paginación, Hibernate
+        # trae la colección entera a memoria en lugar de traer solo la página.
+        default_batch_fetch_size: 100
   flyway:
     enabled: true
+    # Flyway toma su advisory lock dentro de una transacción por defecto. Con un
+    # lock transaccional abierto, un CREATE INDEX CONCURRENTLY de una migración
+    # posterior espera (virtualxid) a que esa transacción termine: es el propio
+    # Flyway el que se bloquea, y el arranque se queda colgado para siempre.
+    # Con lock de sesión no hay transacción abierta y CONCURRENTLY puede seguir.
+    postgresql:
+      transactional:
+        lock: ${FLYWAY_POSTGRESQL_TRANSACTIONAL_LOCK:false}
     # Perfil de desarrollo: además de db/migration incluye db/dev (seed demo).
     locations: "classpath:db/migration,classpath:db/dev"
     baseline-on-migrate: true
