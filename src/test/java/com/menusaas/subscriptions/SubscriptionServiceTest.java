@@ -4,6 +4,7 @@ import com.menusaas.config.AppProperties;
 import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
+import com.menusaas.shared.scheduling.ScheduledJobLock;
 import com.menusaas.subscriptions.dto.SubscribeResult;
 import com.menusaas.subscriptions.dto.SubscriptionRequest;
 import com.menusaas.subscriptions.dto.SubscriptionResponse;
@@ -44,6 +45,13 @@ class SubscriptionServiceTest {
     @Mock
     private PlanRepository planRepository;
 
+    /**
+     * El job de expiración pide un advisory lock; en esta unidad se simula que se
+     * consigue siempre, para poder ejercitar la lógica del job.
+     */
+    @Mock
+    private ScheduledJobLock scheduledJobLock;
+
     private AppProperties appProperties;
     private SubscriptionService service;
 
@@ -55,8 +63,10 @@ class SubscriptionServiceTest {
                 "http://localhost:4200", "http://localhost:8080", "./uploads",
                 new AppProperties.Security(false, 3600, 24), new AppProperties.Payments("", "", "", ""),
                 null);
-        service = new SubscriptionService(subscriptionRepository, planRepository,
+        service = new SubscriptionService(subscriptionRepository, scheduledJobLock, planRepository,
                 new ManualPaymentGateway(appProperties), appProperties);
+        // lenient: solo el job de expiración lo consulta.
+        lenient().when(scheduledJobLock.tryAcquire(anyLong())).thenReturn(true);
     }
 
     private Plan plan(String code, String price) {
@@ -301,6 +311,19 @@ class SubscriptionServiceTest {
                 1L, "FREE", "sub_free", null);
 
         assertThat(response.endsAt()).isNull();
+    }
+
+    @Test
+    void expireDueSubscriptions_lockedByAnotherInstance_isSkipped() {
+        // Con varias réplicas, solo una debe ejecutar el cron: si otra tiene el
+        // advisory lock, esta no toca ninguna suscripción.
+        when(scheduledJobLock.tryAcquire(ScheduledJobLock.EXPIRE_SUBSCRIPTIONS)).thenReturn(false);
+
+        service.expireDueSubscriptions();
+
+        verify(subscriptionRepository, never())
+                .findByStatusAndEndsAtBefore(any(), any(Instant.class));
+        verify(subscriptionRepository, never()).save(any());
     }
 
     @Test

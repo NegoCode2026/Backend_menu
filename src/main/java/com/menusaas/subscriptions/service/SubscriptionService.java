@@ -4,6 +4,7 @@ import com.menusaas.config.AppProperties;
 import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.api.ResourceNotFoundException;
 import com.menusaas.shared.security.SecurityUtils;
+import com.menusaas.shared.scheduling.ScheduledJobLock;
 import com.menusaas.subscriptions.dto.PlanResponse;
 import com.menusaas.subscriptions.dto.SubscribeResult;
 import com.menusaas.subscriptions.dto.SubscriptionRequest;
@@ -43,6 +44,7 @@ public class SubscriptionService {
     private static final long PAID_PERIOD_DAYS = 30L;
 
     private final SubscriptionRepository subscriptionRepository;
+    private final ScheduledJobLock scheduledJobLock;
     private final PlanRepository planRepository;
     private final PaymentGateway paymentGateway;
     private final AppProperties appProperties;
@@ -252,6 +254,12 @@ public class SubscriptionService {
     @Transactional
     @Scheduled(cron = "0 5 * * * *", zone = "UTC")
     public void expireDueSubscriptions() {
+        // Con varias réplicas todas dispararían este cron y competirían por las
+        // mismas suscripciones. El advisory lock hace que solo una lo ejecute.
+        if (!scheduledJobLock.tryAcquire(ScheduledJobLock.EXPIRE_SUBSCRIPTIONS)) {
+            log.debug("Expiración de suscripciones omitida: otra instancia la está ejecutando.");
+            return;
+        }
         List<Subscription> due = subscriptionRepository
                 .findByStatusAndEndsAtBefore(Subscription.STATUS_ACTIVE, Instant.now());
         for (Subscription subscription : due) {

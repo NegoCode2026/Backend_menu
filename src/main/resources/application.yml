@@ -54,6 +54,16 @@ app:
     auth-max-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
     # Máximo de peticiones por minuto al crear pedidos públicos (por IP).
     public-orders-max-per-minute: ${PUBLIC_ORDERS_RATE_LIMIT_PER_MINUTE:10}
+    # Tope de claves vivas del limitador en memoria. Al alcanzarlo se purgan las
+    # ventanas caducadas; si no basta, se rechaza tráfico nuevo en vez de crecer
+    # sin límite (un atacante que varía la IP generaba una clave por intento).
+    max-keys: ${RATE_LIMIT_MAX_KEYS:20000}
+  whatsapp:
+    # Las notificaciones se envían DENTRO de la transacción que actualiza el
+    # pedido. Sin timeout, un proveedor colgado retiene conexión del pool y la
+    # transacción indefinidamente: el pool se agota y cae toda la app.
+    connect-timeout: ${WHATSAPP_CONNECT_TIMEOUT:PT3S}
+    read-timeout: ${WHATSAPP_READ_TIMEOUT:PT5S}
   flyway:
     # repair() realinea checksums y borra entradas fallidas. Apagado por
     # defecto: encender SOLO durante el deploy que lo necesita

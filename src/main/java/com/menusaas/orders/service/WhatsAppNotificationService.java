@@ -1,12 +1,14 @@
 package com.menusaas.orders.service;
 
 import com.menusaas.orders.entity.Order;
+import com.menusaas.shared.http.HttpClientFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,7 +34,19 @@ public class WhatsAppNotificationService {
     @Value("${whatsapp.default-country-code:57}")
     private String defaultCountryCode;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    /**
+     * Con timeout: esta llamada se ejecuta DENTRO de la transacción que actualiza
+     * el pedido. Sin read timeout, un graph.facebook.com colgado retenía la
+     * conexión del pool y la transacción para siempre, y bastaban pocas
+     * notificaciones simultáneas para agotar el pool y tumbar la app entera.
+     */
+    private final RestTemplate restTemplate;
+
+    public WhatsAppNotificationService(
+            @Value("${whatsapp.connect-timeout:PT3S}") Duration connectTimeout,
+            @Value("${whatsapp.read-timeout:PT5S}") Duration readTimeout) {
+        this.restTemplate = HttpClientFactory.restTemplate(connectTimeout, readTimeout);
+    }
 
     public boolean sendOrderReadyNotification(Order order) {
         if (!enabled) {

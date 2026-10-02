@@ -2,6 +2,7 @@ package com.menusaas.subscriptions.payment;
 
 import com.menusaas.config.AppProperties;
 import com.menusaas.shared.api.BadRequestException;
+import com.menusaas.shared.http.HttpClientFactory;
 import com.menusaas.subscriptions.entity.Plan;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -10,6 +11,7 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
@@ -36,7 +38,11 @@ public class EpaycoPaymentGateway implements PaymentGateway {
     private final RestClient restClient;
 
     public EpaycoPaymentGateway(AppProperties appProperties) {
-        this(appProperties, RestClient.create());
+        // Con timeout: createCheckout se llama DENTRO de subscribe(), que es
+        // transaccional. Sin read timeout, una pasarela colgada retenía la
+        // conexión del pool y la transacción indefinidamente.
+        this(appProperties, HttpClientFactory.restClient(
+                Duration.ofSeconds(3), Duration.ofSeconds(8)));
     }
 
     /** Constructor de test: permite inyectar un RestClient simulado. */
@@ -212,7 +218,11 @@ public class EpaycoPaymentGateway implements PaymentGateway {
         if (!MessageDigest.isEqual(
                 expectedSignature.getBytes(StandardCharsets.UTF_8),
                 receivedSignature.getBytes(StandardCharsets.UTF_8))) {
-            log.error("Firma ePayco inválida: esperada={}, recibida={}", expectedSignature, receivedSignature);
+            // No se registra la firma esperada: es la firma legítima de este
+            // payload, y con el ref/transaction del log alguien con acceso a los
+            // logs podría reconstruirla y hacer replay del webhook.
+            log.error("Firma de webhook ePayco inválida para ref={} (firma recibida: {})",
+                    refPayco, mask(receivedSignature));
             throw new BadRequestException("Firma de webhook ePayco inválida");
         }
     }
@@ -225,6 +235,14 @@ public class EpaycoPaymentGateway implements PaymentGateway {
         } catch (Exception ex) {
             throw new IllegalStateException("Error calculando SHA-256", ex);
         }
+    }
+
+    /** Solo los primeros caracteres, para poder correlacionar sin filtrar la firma. */
+    private String mask(String value) {
+        if (value == null || value.length() <= 8) {
+            return "(ausente)";
+        }
+        return value.substring(0, 8) + "...";
     }
 
     /**
