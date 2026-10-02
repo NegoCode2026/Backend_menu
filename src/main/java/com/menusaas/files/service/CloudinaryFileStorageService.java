@@ -24,8 +24,13 @@ import java.util.Set;
 @Primary
 public class CloudinaryFileStorageService implements FileStorageService {
 
+    /**
+     * Tipos admitidos. Sin SVG por el mismo motivo que en
+     * {@link DatabaseFileStorageService}: puede llevar script y se sirve inline
+     * desde el origen de la aplicación.
+     */
     private static final Set<String> ALLOWED_TYPES = Set.of(
-            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/svg+xml"
+            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"
     );
 
     private final Cloudinary cloudinary;
@@ -80,7 +85,14 @@ public class CloudinaryFileStorageService implements FileStorageService {
     @Override
     public String store(MultipartFile file) {
         if (!isSupported(file)) {
-            throw new BadRequestException("Formato de imagen no soportado. Usa JPG, PNG, WEBP, GIF o SVG.");
+            throw new BadRequestException("Formato de imagen no soportado. Usa JPG, PNG, WEBP o GIF.");
+        }
+        // El tipo declarado por el cliente no decide nada: se comprueba la cabecera
+        // real del archivo. Sin esto, "resource_type: auto" subiría a Cloudinary
+        // cualquier contenido (un HTML, un JS) solo con declarar image/jpeg.
+        String detected = databaseFileStorageService.detectedAllowedContentType(file);
+        if (detected == null) {
+            throw new BadRequestException("El contenido del archivo no es una imagen permitida");
         }
 
         if (!configured || cloudinary == null) {

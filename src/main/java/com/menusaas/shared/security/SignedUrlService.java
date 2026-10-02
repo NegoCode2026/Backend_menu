@@ -1,6 +1,7 @@
 package com.menusaas.shared.security;
 
 import com.menusaas.config.AppProperties;
+import com.menusaas.shared.api.BadRequestException;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
@@ -46,6 +47,14 @@ public class SignedUrlService {
     }
 
     /**
+     * Data URI de un formato ráster admitido. Es lo único que se devuelve tal
+     * cual, y solo por compatibilidad con filas ya guardadas antes de que la
+     * entrada de Data URI quedara bloqueada.
+     */
+private static final java.util.regex.Pattern SAFE_RASTER_DATA_URI = java.util.regex.Pattern.compile(
+            "^data:image/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=\\s]+$");
+
+    /**
      * Convierte el valor almacenado en BD a una URL firmada (o lo devuelve tal cual
      * si es una cadena Base64 Data URI o URL externa legítima cargada por el cliente).
      */
@@ -54,9 +63,11 @@ public class SignedUrlService {
             return null;
         }
         String trimmed = stored.trim();
-        // Base64 Data URI
-        if (trimmed.startsWith("data:image/")) {
-            return trimmed;
+        // Base64 Data URI heredado de antes del bloqueo de entrada.
+        if (trimmed.startsWith("data:")) {
+            // Un SVG en base64 puede llevar <script> y se sirve inline desde el
+            // origen de la app: se descarta en vez de exponerlo.
+            return SAFE_RASTER_DATA_URI.matcher(trimmed).matches() ? trimmed : null;
         }
         // Si es una URL interna (contiene /api/public/files/), extraemos el fileId y re-firmamos
         // con expiración actual para garantizar que la firma siempre sea válida y fresca.
@@ -76,16 +87,22 @@ public class SignedUrlService {
     }
 
     /**
-     * Convierte un valor aceptado por el cliente (Base64 Data URI, fileId, URL firmada interna o
-     * URL externa) en el valor que se almacena en BD.
+     * Convierte un valor aceptado por el cliente (fileId, URL firmada interna o URL
+     * externa) en el valor que se almacena en BD.
+     *
+     * <p>Los Data URI se rechazan: permiten meter contenido arbitrario en la
+     * columna (un SVG con script, o megabytes de base64) saltándose por completo
+     * la validación de subida. Para imágenes hay que pasar por
+     * {@code POST /api/files/upload}, que valida cabecera y tamaño.
      */
     public String toStoredValue(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String trimmed = value.trim();
-        if (trimmed.startsWith("data:image/")) {
-            return trimmed;
+        if (trimmed.startsWith("data:")) {
+            throw new BadRequestException(
+                    "No se admiten imágenes en base64. Sube el archivo a /api/files/upload y usa el fileId devuelto.");
         }
         final String marker = "/api/public/files/";
         int idx = trimmed.indexOf(marker);

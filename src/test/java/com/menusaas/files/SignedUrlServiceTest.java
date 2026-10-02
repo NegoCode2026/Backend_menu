@@ -1,6 +1,7 @@
 package com.menusaas.files;
 
 import com.menusaas.config.AppProperties;
+import com.menusaas.shared.api.BadRequestException;
 import com.menusaas.shared.security.SignedUrlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * URLs firmadas: sin firma válida y vigente no se puede acceder a un archivo,
@@ -30,6 +32,42 @@ class SignedUrlServiceTest {
                 new AppProperties.Security(false, 3600, 24), new AppProperties.Payments("", "", "", ""),
                 null);
         signedUrlService = new SignedUrlService(props);
+    }
+
+    @Test
+    void toStoredValue_rejectsDataUri_soArbitraryContentCannotBeStored() {
+        // Un Data URI允许 meter contenido arbitrario en la columna saltándose la
+        // validación de subida (incluido un SVG con <script>).
+        String svgDataUri = "data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9InN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+";
+        assertThatThrownBy(() -> signedUrlService.toStoredValue(svgDataUri))
+                .isInstanceOf(BadRequestException.class);
+
+        assertThatThrownBy(() -> signedUrlService.toStoredValue("data:image/png;base64,iVBORw0KGgo="))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void toSignedUrlOrNull_keepsLegacyRasterDataUri() {
+        // Filas ya guardadas antes del bloqueo: las imágenes ráster siguen viéndose.
+        String pngDataUri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+        assertThat(signedUrlService.toSignedUrlOrNull(pngDataUri)).isEqualTo(pngDataUri);
+    }
+
+    @Test
+    void toSignedUrlOrNull_dropsLegacySvgDataUri() {
+        // Un SVG en base64 puede llevar script y se sirve inline desde el origen
+        // de la app: se descarta en vez de exponerlo.
+        String svgDataUri = "data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9InN2Zz48c2NyaXB0Pjwvc2NyaXB0Pjwvc3ZnPg==";
+        assertThat(signedUrlService.toSignedUrlOrNull(svgDataUri)).isNull();
+    }
+
+    @Test
+    void toStoredValue_keepsFileIdAndExternalUrl() {
+        assertThat(signedUrlService.toStoredValue("abc-123.png")).isEqualTo("abc-123.png");
+        assertThat(signedUrlService.toStoredValue("https://res.cloudinary.com/x/y.jpg"))
+                .isEqualTo("https://res.cloudinary.com/x/y.jpg");
+        assertThat(signedUrlService.toStoredValue(
+                "http://localhost:8080/api/public/files/abc.png?exp=1&sig=2")).isEqualTo("abc.png");
     }
 
     @Test

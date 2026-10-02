@@ -37,8 +37,6 @@ public record RestaurantRequest(
         @Size(max = 120, message = "El Facebook no puede superar 120 caracteres")
         String facebook,
 
-        Boolean active,
-
         Boolean open
 ) {
 }

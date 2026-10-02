@@ -106,11 +106,32 @@ class DatabaseFileStorageServiceTest {
     }
 
     @Test
-    void store_svgByDeclaration_ok() {
-        String fileId = storage.store(
-                new MockMultipartFile("file", "logo.svg", "image/svg+xml", SVG_BYTES));
+    void store_svg_rejected_evenIfDeclaredAsSvg() {
+        // El SVG es un documento XML que puede llevar <script> y se sirve inline
+        // desde el origen de la app. Antes se aceptaba solo por la declaración
+        // del cliente, sin mirar un byte.
+        assertThatThrownBy(() -> storage.store(
+                new MockMultipartFile("file", "logo.svg", "image/svg+xml", SVG_BYTES)))
+                .isInstanceOf(BadRequestException.class);
+    }
 
-        assertThat(fileId).endsWith(".svg");
+    @Test
+    void store_htmlDisguisedAsJpeg_rejected() {
+        // Declarar image/jpeg no convierte un HTML en una imagen: manda la cabecera.
+        assertThatThrownBy(() -> storage.store(
+                new MockMultipartFile("file", "x.jpg", "image/jpeg",
+                        "<html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8))))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void store_arbitraryBytesDeclaredAsPng_rejected() {
+        // Mismo ataque por la otra allowlist: declarar image/png y enviar
+        // cualquier cosa. Antes el tipo declarado decidía y se aceptaba.
+        byte[] notAnImage = "esto no es una imagen".getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> storage.store(
+                new MockMultipartFile("file", "x.png", "image/png", notAnImage)))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
@@ -129,11 +150,12 @@ class DatabaseFileStorageServiceTest {
     }
 
     @Test
-    void store_shortBytesWithAllowedDeclaration_usesDeclaredType() {
-        String fileId = storage.store(
-                new MockMultipartFile("file", "mini.png", "image/png", SHORT_BYTES));
-
-        assertThat(fileId).endsWith(".png");
+    void store_shortBytesWithAllowedDeclaration_rejected() {
+        // Un archivo demasiado corto para tener cabecera no puede verificarse.
+        // Antes se aceptaba solo por lo que declaraba el cliente.
+        assertThatThrownBy(() -> storage.store(
+                new MockMultipartFile("file", "mini.png", "image/png", SHORT_BYTES)))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
@@ -144,12 +166,13 @@ class DatabaseFileStorageServiceTest {
     }
 
     @Test
-    void store_unknownBytesWithAllowedDeclaration_usesDeclaredType() {
+    void store_unknownBytesWithAllowedDeclaration_rejected() {
+        // 12 bytes a cero no son ninguna imagen admitida, aunque el cliente
+        // declare image/png.
         byte[] unknown = new byte[12];
-        String fileId = storage.store(
-                new MockMultipartFile("file", "x.png", "image/png", unknown));
-
-        assertThat(fileId).endsWith(".png");
+        assertThatThrownBy(() -> storage.store(
+                new MockMultipartFile("file", "x.png", "image/png", unknown)))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test

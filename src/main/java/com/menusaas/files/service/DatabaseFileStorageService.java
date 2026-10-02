@@ -26,8 +26,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DatabaseFileStorageService implements FileStorageService {
 
+    /**
+     * Tipos admitidos. SVG queda excluido a propósito: es un documento XML que
+     * puede llevar &lt;script&gt;, y se sirve inline desde el mismo origen que la
+     * app (donde el navegador adjunta la cookie de sesión). Si se necesita,
+     * exigir sanitizado previo en el cliente y servirlo con Content-Disposition.
+     */
     private static final Set<String> ALLOWED_TYPES = Set.of(
-            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/svg+xml"
+            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"
     );
 
     private static final Map<String, String[]> MAGIC_BYTE_TYPES = Map.of(
@@ -47,15 +53,17 @@ public class DatabaseFileStorageService implements FileStorageService {
             throw new BadRequestException("El archivo está vacío");
         }
         if (!isSupported(file)) {
-            throw new BadRequestException("Formato no permitido. Use JPG, PNG, WEBP, GIF o SVG");
+            throw new BadRequestException("Formato no permitido. Use JPG, PNG, WEBP o GIF");
         }
         try {
             byte[] bytes = file.getBytes();
             if (bytes.length == 0) {
                 throw new BadRequestException("El archivo recibido está vacío");
             }
-            String detectedType = detectContentType(bytes, file.getContentType());
-            if (!ALLOWED_TYPES.contains(detectedType)) {
+            String detectedType = detectContentType(bytes);
+            // null = la cabecera no es de un formato admitido. Set.of() lanza NPE
+            // en contains(null), así que el null se comprueba aparte.
+            if (detectedType == null || !ALLOWED_TYPES.contains(detectedType)) {
                 throw new BadRequestException("El contenido del archivo no es una imagen permitida");
             }
 
@@ -126,6 +134,11 @@ public class DatabaseFileStorageService implements FileStorageService {
         return localFileStorageService.contentTypeForId(fileId);
     }
 
+    /**
+     * Filtro barato previo. NO es la validación real: la decisiva es la
+     * cabecera del archivo dentro de store(). Aquí solo se descarta lo
+     * evidente para no leer bytes de algo que el cliente ya declaró inválido.
+     */
     @Override
     public boolean isSupported(MultipartFile file) {
         if (file == null || file.isEmpty()) return false;
@@ -133,37 +146,49 @@ public class DatabaseFileStorageService implements FileStorageService {
         return declared == null || ALLOWED_TYPES.contains(declared.toLowerCase());
     }
 
-    private String detectContentType(byte[] bytes, String declaredType) {
-        if (declaredType != null && declaredType.equalsIgnoreCase("image/svg+xml")) {
-            return "image/svg+xml";
-        }
-        if (bytes.length < 12) {
-            return declaredType != null && ALLOWED_TYPES.contains(declaredType.toLowerCase())
-                    ? declaredType.toLowerCase()
-                    : "application/octet-stream";
+    /**
+     * Determina el tipo por la cabecera real del archivo.
+     *
+     * <p>El Content-Type declarado por el cliente NUNCA se usa como resultado:
+     * declararlo basta para saltarse la validación (subir un .html o un .js como
+     * "image/jpeg"). Si la cabecera no corresponde a un formato de la lista
+     * blanca se devuelve null y el almacenamiento lo rechaza.
+     */
+    String detectContentType(byte[] bytes) {
+        if (bytes == null || bytes.length < 12) {
+            return null;
         }
         String hex = hexPrefix(bytes, 4);
         for (Map.Entry<String, String[]> entry : MAGIC_BYTE_TYPES.entrySet()) {
             if (hex.startsWith(entry.getKey())) {
                 String[] candidate = entry.getValue();
                 if ("image/webp".equals(candidate[0])) {
-                    if (bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') {
-                        return "image/webp";
-                    }
-                    return "application/octet-stream";
+                    // RIFF____WEBP: los bytes 8-11 deben decir WEBP; si no, es otro RIFF.
+                    return (bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P')
+                            ? "image/webp" : null;
                 }
                 if ("image/gif".equals(candidate[0])) {
-                    if ((bytes[4] == '7' || bytes[4] == '9') && bytes[5] == 'a') {
-                        return "image/gif";
-                    }
-                    return "application/octet-stream";
+                    // GIF87a / GIF89a
+                    return ((bytes[4] == '7' || bytes[4] == '9') && bytes[5] == 'a') ? "image/gif" : null;
                 }
                 return candidate[0];
             }
         }
-        return declaredType != null && ALLOWED_TYPES.contains(declaredType.toLowerCase())
-                ? declaredType.toLowerCase()
-                : "application/octet-stream";
+        return null;
+    }
+
+    /**
+     * Tipo real de la imagen o null si no es una imagen admitida.
+     * Lo consumen tanto este almacenamiento como el de Cloudinary, para que
+     * ninguna ruta confíe en el Content-Type declarado por el cliente.
+     */
+    public String detectedAllowedContentType(MultipartFile file) {
+        try {
+            String detected = detectContentType(file.getBytes());
+            return detected != null && ALLOWED_TYPES.contains(detected) ? detected : null;
+        } catch (IOException ex) {
+            throw new BadRequestException("No se pudo leer el archivo recibido");
+        }
     }
 
     private String hexPrefix(byte[] bytes, int n) {
@@ -180,7 +205,6 @@ public class DatabaseFileStorageService implements FileStorageService {
             case "image/png" -> ".png";
             case "image/gif" -> ".gif";
             case "image/webp" -> ".webp";
-            case "image/svg+xml" -> ".svg";
             default -> ".bin";
         };
     }
