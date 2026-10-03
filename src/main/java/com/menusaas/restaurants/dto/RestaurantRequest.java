@@ -38,6 +38,12 @@ public record RestaurantRequest(
         @Size(max = 120, message = "El Facebook no puede superar 120 caracteres")
         String facebook,
 
+        @Size(max = 64, message = "El NIT no puede superar 64 caracteres")
+        String taxId,
+
+        @Size(max = 60, message = "El tiempo de preparación no puede superar 60 caracteres")
+        String estimatedPrepTime,
+
         Boolean open
 ) {
 }

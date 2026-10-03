@@ -11,6 +11,7 @@ import com.menusaas.subscriptions.dto.SubscriptionResponse;
 import com.menusaas.subscriptions.entity.Plan;
 import com.menusaas.subscriptions.entity.Subscription;
 import com.menusaas.subscriptions.payment.ManualPaymentGateway;
+import com.menusaas.subscriptions.payment.PaymentGateway;
 import com.menusaas.subscriptions.repository.PlanRepository;
 import com.menusaas.subscriptions.repository.SubscriptionRepository;
 import com.menusaas.subscriptions.service.SubscriptionService;
@@ -324,6 +325,42 @@ class SubscriptionServiceTest {
         verify(subscriptionRepository, never())
                 .findByStatusAndEndsAtBefore(any(), any(Instant.class));
         verify(subscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void subscribe_withGatewayConfigured_returnsSessionIdAndToken() throws Exception {
+        // Smart Checkout v2 exige sessionId Y token para abrir el cobro. Antes
+        // solo se propagaba el sessionId y el token se quedaba en el backend,
+        // así que el checkout no se podía abrir y el pago no se completaba.
+        when(planRepository.findByCode("PRO")).thenReturn(Optional.of(plan("PRO", "29900")));
+        when(subscriptionRepository.findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(
+                1L, Subscription.STATUS_PENDING))
+                .thenReturn(Optional.of(Subscription.builder()
+                        .id(30L)
+                        .restaurantId(1L)
+                        .planId(1L)
+                        .status(Subscription.STATUS_PENDING)
+                        .startsAt(Instant.now())
+                        .build()));
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan("PRO", "29900")));
+
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.isConfigured()).thenReturn(true);
+        when(gateway.createCheckout(any(), any(), any(), any()))
+                .thenReturn(new PaymentGateway.CheckoutSession("ses_123", "tok_abc"));
+        SubscriptionService svc = new SubscriptionService(subscriptionRepository, scheduledJobLock,
+                planRepository, gateway, appProperties);
+
+        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
+
+            SubscribeResult result = svc.subscribe(new SubscriptionRequest("PRO"));
+
+            assertThat(result.checkoutSessionId()).isEqualTo("ses_123");
+            assertThat(result.checkoutToken())
+                    .as("el frontend necesita el token para abrir Smart Checkout")
+                    .isEqualTo("tok_abc");
+        }
     }
 
     @Test

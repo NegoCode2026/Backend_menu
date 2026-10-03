@@ -103,7 +103,7 @@ public class SubscriptionService {
             pending.setProvider(Subscription.PROVIDER_EPAYCO);
             pending.setProviderReference(session.sessionId());
             subscriptionRepository.save(pending);
-            return new SubscribeResult(toResponse(pending), session.sessionId());
+            return new SubscribeResult(toResponse(pending), session.sessionId(), session.token());
         }
 
         // Modo manual (sin pasarela): activación inmediata.

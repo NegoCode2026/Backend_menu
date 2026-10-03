@@ -29,6 +29,10 @@ public record PublicMenuResponse(
             String whatsapp,
             String instagram,
             String facebook,
+            /** NIT para la factura que genera el cliente. */
+            String taxId,
+            /** Lo que el restaurante configuró, p. ej. "20-30 min"; null si no lo fijó. */
+            String estimatedPrepTime,
             boolean open
     ) {
         /**
@@ -37,7 +41,8 @@ public record PublicMenuResponse(
         public static RestaurantInfo from(Restaurant r, String logoUrl) {
             return new RestaurantInfo(
                     r.getName(), r.getSlug(), logoUrl, r.getDescription(), r.getPhone(),
-                    r.getAddress(), r.getWhatsapp(), r.getInstagram(), r.getFacebook(), r.isOpen());
+                    r.getAddress(), r.getWhatsapp(), r.getInstagram(), r.getFacebook(),
+                    r.getTaxId(), r.getEstimatedPrepTime(), r.isOpen());
         }
     }
 

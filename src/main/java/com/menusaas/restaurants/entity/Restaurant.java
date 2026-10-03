@@ -51,6 +51,14 @@ public class Restaurant {
     @Column(length = 120)
     private String facebook;
 
+    /** NIT / identificación tributaria, para la factura. */
+    @Column(name = "tax_id", length = 64)
+    private String taxId;
+
+    /** Tiempo estimado de preparación que ve el cliente, p. ej. "20-30 min". */
+    @Column(name = "estimated_prep_time", length = 60)
+    private String estimatedPrepTime;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;

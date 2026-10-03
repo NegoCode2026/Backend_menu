@@ -15,6 +15,8 @@ public record RestaurantResponse(
         String whatsapp,
         String instagram,
         String facebook,
+        String taxId,
+        String estimatedPrepTime,
         boolean active,
         boolean open,
         Instant createdAt,
@@ -27,6 +29,7 @@ public record RestaurantResponse(
         return new RestaurantResponse(
                 r.getId(), r.getName(), r.getSlug(), logoUrl, r.getDescription(),
                 r.getPhone(), r.getAddress(), r.getWhatsapp(), r.getInstagram(), r.getFacebook(),
+                r.getTaxId(), r.getEstimatedPrepTime(),
                 r.isActive(), r.isOpen(), r.getCreatedAt(), r.getUpdatedAt()
         );
     }

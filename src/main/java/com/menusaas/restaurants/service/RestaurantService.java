@@ -109,6 +109,8 @@ public class RestaurantService {
         restaurant.setWhatsapp(request.whatsapp());
         restaurant.setInstagram(request.instagram());
         restaurant.setFacebook(request.facebook());
+        restaurant.setTaxId(request.taxId());
+        restaurant.setEstimatedPrepTime(request.estimatedPrepTime());
         // 'active' no se acepta aquí a propósito: es el interruptor de suspensión del
         // SaaS y solo debe cambiarlo un SUPER_ADMIN (PATCH /api/admin/restaurants/{id}/active).
         // Si el restaurante pudiera auto-reactivarse, bastaría un PUT /restaurants/me.
