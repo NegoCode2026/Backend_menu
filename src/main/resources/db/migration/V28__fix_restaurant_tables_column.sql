@@ -39,3 +39,14 @@ END $$;
 
 DROP INDEX IF EXISTS idx_restaurant_tables_restaurant;
 DROP INDEX IF EXISTS idx_restaurant_tables_lookup;
+-- La columna quedó como VARCHAR(50) (venía de table_number) mientras V25 declara
+-- VARCHAR(20). No rompe nada por sí solo, pero hace que el esquema difiera del
+-- que produce una instalación limpia. Se ajusta al ancho declarado.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'restaurant_tables' AND column_name = 'number'
+                 AND character_maximum_length <> 20) THEN
+        ALTER TABLE restaurant_tables ALTER COLUMN number TYPE VARCHAR(20);
+    END IF;
+END $$;
