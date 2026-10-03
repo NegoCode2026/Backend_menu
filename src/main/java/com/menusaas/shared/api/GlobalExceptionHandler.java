@@ -5,7 +5,9 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.web.servlet.MultipartProperties;
+import jakarta.persistence.OptimisticLockException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -40,6 +42,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException ex) {
         return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage());
+    }
+
+    /**
+     * Conflicto de versionado optimista: alguien guardó el mismo registro entre
+     * que este usuario lo leyó y lo editó. Se responde 409 para que recargue, en
+     * lugar de letting the second save overwrite the first without a trace.
+     */
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class,
+            OptimisticLockException.class})
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(Exception ex) {
+        log.warn("Conflicto de versionado optimista: {}", ex.getMessage());
+        return build(HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION",
+                "Este registro cambió mientras lo editabas. Recarga y vuelve a aplicar tus cambios.");
     }
 
     @ExceptionHandler(BadRequestException.class)

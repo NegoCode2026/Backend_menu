@@ -21,6 +21,16 @@ public class Ingredient implements com.menusaas.shared.tenancy.TenantOwned {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Versionado optimista. Sin esto, dos ediciones simultaneas (dos admins, o
+     * la misma persona en dos pestanas) se pisan en silencio: el segundo UPDATE
+     * sobrescribe al primero sin error ni aviso. Para precios y costes eso es
+     * perdida de dinero sin rastro.
+     */
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 
