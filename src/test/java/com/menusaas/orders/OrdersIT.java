@@ -13,6 +13,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -628,6 +629,106 @@ class OrdersIT extends BaseIntegrationTest {
         ResponseEntity<JsonNode> after = rest.getForEntity("/api/public/menu/" + slug, JsonNode.class);
         assertThat(after.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(after.getBody().get("data").toString()).contains("15000");
+    }
+
+
+    /**
+     * Aislamiento en el listado, que es la ruta que usa Specification
+     * (orderRepository.findAll(spec, ...)) en vez de un metodo derivado con el
+     * tenant en el nombre.
+     *
+     * <p>Es el patron que TenantRepositoriesTest no cubre: aquel comprueba por
+     * reflexion que los metodos del repositorio mencionen el tenant, pero un
+     * findAll(spec) se salta esa regla por completo. Si alguien construye la
+     * Specification sin el predicado de restaurant_id, el listado devolveria
+     * pedidos de todos los tenants y ningun test lo detectaria.
+     *
+     * <p>El aislamiento descansa en una sola capa — que este test no puede hacer
+     * opcional. Ver la seccion de tenancy de docs/ARCHITECTURE.md.
+     */
+    @Test
+    void orderListing_neverLeaksAcrossTenants() throws Exception {
+        TestHttp.Session tenantA = TestHttp.register(rest, objectMapper,
+                "Orders A", "orders-iso-a@test.com", "orders-iso-a");
+        TestHttp.Session tenantB = TestHttp.register(rest, objectMapper,
+                "Orders B", "orders-iso-b@test.com", "orders-iso-b");
+
+        // Un pedido en cada tenant.
+        long productA = createProduct(tenantA, "Plato A");
+        long productB = createProduct(tenantB, "Plato B");
+
+        ResponseEntity<JsonNode> orderA = createOrder(tenantA, Map.of(
+                "customerName", "Cliente A",
+                "items", List.of(Map.of("productId", productA, "quantity", 1))));
+        ResponseEntity<JsonNode> orderB = createOrder(tenantB, Map.of(
+                "customerName", "Cliente B",
+                "items", List.of(Map.of("productId", productB, "quantity", 1))));
+        assertThat(orderA.getStatusCode().value()).isEqualTo(201);
+        assertThat(orderB.getStatusCode().value()).isEqualTo(201);
+
+        long idA = orderA.getBody().get("data").get("id").asLong();
+        long idB = orderB.getBody().get("data").get("id").asLong();
+
+        ResponseEntity<JsonNode> listA = rest.exchange("/api/orders", HttpMethod.GET,
+                tenantA.get(), JsonNode.class);
+        ResponseEntity<JsonNode> listB = rest.exchange("/api/orders", HttpMethod.GET,
+                tenantB.get(), JsonNode.class);
+
+        List<Long> idsA = idsOf(listA);
+        List<Long> idsB = idsOf(listB);
+
+        assertThat(idsA).contains(idA);
+        assertThat(idsA).doesNotContain(idB);
+        assertThat(idsB).contains(idB);
+        assertThat(idsB).doesNotContain(idA);
+    }
+
+    /** El historial de estados tampoco debe cruzarse entre tenants. */
+    @Test
+    void orderHistory_neverLeaksAcrossTenants() throws Exception {
+        TestHttp.Session tenantA = TestHttp.register(rest, objectMapper,
+                "Hist A", "orders-hist-a@test.com", "orders-hist-a");
+        TestHttp.Session tenantB = TestHttp.register(rest, objectMapper,
+                "Hist B", "orders-hist-b@test.com", "orders-hist-b");
+
+        long productA = createProduct(tenantA, "Plato Hist A");
+        ResponseEntity<JsonNode> orderA = createOrder(tenantA, Map.of(
+                "customerName", "Cliente A",
+                "items", List.of(Map.of("productId", productA, "quantity", 1))));
+        long idA = orderA.getBody().get("data").get("id").asLong();
+
+        // B pide directamente el pedido de A: 404, no los datos.
+        ResponseEntity<JsonNode> cross = rest.exchange("/api/orders/" + idA, HttpMethod.GET,
+                tenantB.get(), JsonNode.class);
+        assertThat(cross.getStatusCode().value()).isEqualTo(404);
+        assertThat(cross.getBody().has("data")).isFalse();
+    }
+
+    /**
+     * Crea un producto en el tenant de la sesion y devuelve su id. Hace falta uno
+     * propio por tenant: un pedido solo acepta productos del propio restaurante.
+     */
+    private long createProduct(TestHttp.Session session, String name) throws Exception {
+        ResponseEntity<JsonNode> created = rest.exchange("/api/products", HttpMethod.POST,
+                TestHttp.body(objectMapper, (Object) Map.of(
+                        "name", name, "price", 15000, "available", true), session), JsonNode.class);
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        return created.getBody().get("data").get("id").asLong();
+    }
+
+    /** Crea un pedido manual dentro del tenant de la sesion. */
+    private ResponseEntity<JsonNode> createOrder(TestHttp.Session session, Map<String, Object> body)
+            throws Exception {
+        return rest.exchange("/api/orders", HttpMethod.POST,
+                TestHttp.body(objectMapper, (Object) body, session), JsonNode.class);
+    }
+
+    private List<Long> idsOf(ResponseEntity<JsonNode> response) {
+        List<Long> ids = new ArrayList<>();
+        for (JsonNode node : response.getBody().get("data")) {
+            ids.add(node.get("id").asLong());
+        }
+        return ids;
     }
 
     private ResponseEntity<JsonNode> postPublicOrder(String slug, Map<String, Object> body) {

@@ -76,6 +76,64 @@ Notas:
 - RLS de Postgres solo bloquea la API pública de Supabase; el backend es owner
   y el aislamiento lo hace el código (filtrado manual en cada consulta).
 
+### El aislamiento tiene UNA capa, y conviene decirlo claro
+
+En Postgres, **el dueño de una tabla está exento de RLS** salvo que la tabla
+declare `FORCE ROW LEVEL SECURITY`. Este proyecto conecta como `menu_saas`, que
+es el owner, y las políticas de `V7` están vacías a propósito (deny-all). En
+concreto, hoy:
+
+| Comprobación | Valor real |
+|---|---|
+| `pg_policies` | **0 políticas** |
+| `relforcerowsecurity` | **false en todas las tablas** |
+| RLS en tablas creadas tras `V7` | ausente en 9 (`cash_closings`, `ingredients`, `recipe_items`, `role_permissions`, `user_permissions`, `restaurant_tables`, `stock_movements`, `order_status_history`, `stored_files`) |
+
+Además, `audit_log` **no tiene columna `restaurant_id`**: la bitácora se puede
+consultar pero no se puede scopear por tenant ni en SQL ni por RLS. Hoy solo la
+lee el backoffice, pero es una laguna de modelo a tener en cuenta antes de dar
+por cerrado el aislamiento.
+
+Es decir: **la RLS no protege a este backend de nada.** Sirve para que el API
+público de Supabase no lea las tablas, y nada más. El aislamiento real lo hace
+que cada consulta lleve el tenant, y lo sostienen:
+
+- `TenantRepositoriesTest` (por reflexión: todo método de repositorio de entidad
+  `TenantOwned` menciona el tenant en el nombre) y `ModuleBoundariesTest`.
+- Un test de ArchUnit que prohíbe `findById`/`deleteById` fuera de `admin`.
+- `TenantIsolationIT` y las pruebas de `OrdersIT.orderListing_neverLeaksAcrossTenants`
+  y `orderHistory_neverLeaksAcrossTenants`, que crean dos tenants reales y
+  comprueban que el listado (que va por `Specification`, patrón que las pruebas
+  por reflexión **no** cubren) y el historial no se cruzan.
+
+**El patrón que falta cubrir**: un `repository.findAll(spec)` se salta la regla
+de nombres, porque el tenant viaja dentro de la `Specification`. Si alguien
+construye ese spec sin el predicado de `restaurant_id`, devuelve datos de todos
+los tenants y ninguna prueba estática lo detecta. Hoy solo hay un `findAll(spec)`
+en el proyecto (`OrderService.listMine`) y sí lo lleva.
+
+### Qué exigiría cerrar esto en la base de datos
+
+`FORCE ROW LEVEL SECURITY` + políticas sobre una variable de sesión
+(`SET LOCAL app.tenant_id`), más un filtro que la fije por petición. **No está
+hecho, a propósito, porque tiene un coste que hay que decidir antes:**
+
+1. **Contexto de sistema.** Login, menú público, tracking, webhook de ePayco,
+   jobs programados y todo `SUPER_ADMIN` consultan sin tenant (no existe, o es
+   null a propósito). Hoy son ~20 métodos de repositorio. Cada uno necesitaría
+   una marca explícita de "contexto de sistema"; un olvido rompe producción.
+2. **Fallo abierto o cerrado.** Sin variable, una política estricta no devuelve
+   nada (fail-closed: un olvido se ve, no filtra) o devuelve todo
+   (fail-open: conserva el problema actual). Fail-closed es lo correcto, pero
+   convierte cualquier olvido en una caída.
+3. **El pool de conexiones.** `app.tenant_id` es de *sesión*: con HikariCP, si
+   la petición siguiente reutiliza esa conexión sin fijarla, vería los datos del
+   tenant anterior. Obliga a fijar y **limpiar** siempre, incluso en error.
+
+Es decir: worthwhile, pero no es un cambio que deba aplicarse sin decidir (1) y
+aceptar (2) y (3). Hasta entonces, la segunda capa la dan los tests de
+aislamiento, y por eso estos cubren comportamiento y no solo firmas de métodos.
+
 ## Permisos
 
 Roles: `SUPER_ADMIN`, `RESTAURANT_ADMIN`, `RESTAURANT_USER`, `WAITER`, `CASHIER`.
