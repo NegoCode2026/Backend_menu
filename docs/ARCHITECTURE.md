@@ -112,6 +112,36 @@ construye ese spec sin el predicado de `restaurant_id`, devuelve datos de todos
 los tenants y ninguna prueba estática lo detecta. Hoy solo hay un `findAll(spec)`
 en el proyecto (`OrderService.listMine`) y sí lo lleva.
 
+### Auditoría de los métodos sin tenant
+
+Se trazó cada método de repositorio que no lleva `restaurantId` en el nombre,
+para confirmar que los legítimos son solo de sistema:
+
+| Método | Contexto | Por qué es correcto |
+|---|---|---|
+| `RestaurantRepository.findBySlug` | público | El slug **es** el identificador del tenant; solo lo llama el menú público |
+| `OrderRepository.findByTrackingCode` | público | El código de tracking es el secreto; no hay sesión |
+| `UserRepository.findByEmail` | login | Todavía no existe tenant: es lo que resuelve quién es |
+| `RefreshTokenRepository.findByToken` | refresh | El token es el secreto |
+| `SubscriptionRepository.findByProviderReference` | webhook | Firma SHA256 verificada antes |
+| `SubscriptionRepository.findByStatusAndEndsAtBefore` | job | Expiración masiva, cruza por diseño |
+| `RestaurantRepository.countByActive`, `SubscriptionRepository.countByStatus` | admin | Métricas globales del backoffice |
+| `PlanRepository.*` | autenticado | `plans` no tiene tenant: es catálogo global |
+
+Ninguno es alcanzable desde una petición de tenant con datos de otro tenant.
+
+**Las tablas hijas** (`order_items`, `order_status_history`, `recipe_items`)
+tampoco tienen `restaurant_id` y se consultan por id de padre. El patrón que las
+salva es **validar el padre con el tenant antes de tocar la tabla sin tenant**
+(`ProductService.findScoped`, `OrderService.getMineOrder`,
+`InventoryService.findIngredientInRestaurant`). Ese patrón tampoco lo cubren las
+pruebas por reflexión, así que `ChildTableIsolationIT` lo comprueba en ejecución
+con dos tenants reales.
+
+`stored_files` no necesita nada de eso: se sirve con URL firmada y la firma
+cubre el `fileId`, así que conocer el identificador no basta para leer la imagen
+de otro.
+
 ### Qué exigiría cerrar esto en la base de datos
 
 `FORCE ROW LEVEL SECURITY` + políticas sobre una variable de sesión
