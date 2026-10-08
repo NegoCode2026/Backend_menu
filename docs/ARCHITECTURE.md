@@ -160,9 +160,38 @@ hecho, a propósito, porque tiene un coste que hay que decidir antes:**
    la petición siguiente reutiliza esa conexión sin fijarla, vería los datos del
    tenant anterior. Obliga a fijar y **limpiar** siempre, incluso en error.
 
-Es decir: worthwhile, pero no es un cambio que deba aplicarse sin decidir (1) y
-aceptar (2) y (3). Hasta entonces, la segunda capa la dan los tests de
-aislamiento, y por eso estos cubren comportamiento y no solo firmas de métodos.
+### Por qué el filtro de Hibernate no se aplicó (y cómo saber que un mecanismo está muerto)
+
+Se intentó un filtro `@Filter` de Hibernate sobre las 10 entidades `TenantOwned`,
+fail-closed. **No se aplicó, y dos veces. Ambos intentos se documentan porque
+el fallo es silencioso: los 178 tests pasaban igual.**
+
+1. **Un `@Aspect` AOP sobre los repositorios.** No había AOP en el `pom.xml`, así
+   que el aspecto era código muerto. Peor: los repositorios de Spring Data son
+   proxies, y un aspecto así exige `spring-boot-starter-aop`. Con AOP añadido, el
+   aspecto sí se disparaba — y aun así **no filtraba nada**: se ejecuta fuera de
+   la transacción, abre su propia sesión y la cierra antes de que el repositorio
+   lance la consulta. El filtro se perdía.
+2. **`Interceptor.onOpenSession`** es el hook correcto en apariencia, pero
+   **Hibernate 6.6 lo eliminó**: `org.hibernate.Interceptor` ya no lo expone, ni
+   `SessionEventListener`. Quedaría el SPI `Integrator`, que exige un
+   `META-INF/services` y pieza considerably más invasiva.
+
+**Dos vías que sí funcionarían**, ambas con coste real:
+
+- **`Integrator` + `SessionEventListener`**: se activa el filtro al abrir cada
+  sesión, ya dentro de la transacción. Es lo correcto, y lo que impide que una
+  petición deje su filtro en la siguiente por el pool de conexiones.
+- **`StatementInspector`**: reescribir el SQL para inyectar el predicado. Es
+  mucho más simple de cablear, pero parsear y reescribir SQL es frágil ante
+  cualquier cambio en Hibernate.
+
+**La lección que sí se aplica hoy:** un test verde no demuestra que un mecanismo
+funcione. Al verificar el filtro hubo que comprobar que *restringía* los
+resultados (`tenant inexistente → 0 filas`), no solo que compilaba.
+
+Hasta que se elija una de esas dos vías, la segunda capa la dan los tests de
+aislamiento, y por eso cubren comportamiento y no solo firmas de métodos.
 
 ## Permisos
 
