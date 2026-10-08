@@ -364,13 +364,37 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void getMySubscription_withoutActive_throws404() {        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+    void getMySubscription_withoutAny_throws404() {
+        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(subscriptionRepository.findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(1L, Subscription.STATUS_ACTIVE))
+            when(subscriptionRepository.findFirstByRestaurantIdOrderByCreatedAtDesc(1L))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(service::getMySubscription)
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
+
+    @Test
+    void getMySubscription_expired_isReturned_soTheOwnerCanSeeAndRenew() {
+        // Buscar solo la ACTIVE devolvía 404 a un restaurante con la suscripción
+        // vencida, indistinguible de uno que nunca tuvo ninguna. Ahora ve su
+        // estado, que es justo lo que necesita para volver a pagar.
+        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
+            security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
+            when(subscriptionRepository.findFirstByRestaurantIdOrderByCreatedAtDesc(1L))
+                    .thenReturn(Optional.of(Subscription.builder()
+                            .id(9L).restaurantId(1L).planId(1L)
+                            .status(Subscription.STATUS_EXPIRED)
+                            .startsAt(Instant.now().minusSeconds(86400L * 60))
+                            .endsAt(Instant.now().minusSeconds(86400L * 30))
+                            .build()));
+            when(planRepository.findById(1L)).thenReturn(Optional.of(plan("PRO", "29900")));
+
+            SubscriptionResponse response = service.getMySubscription();
+
+            assertThat(response.status()).isEqualTo(Subscription.STATUS_EXPIRED);
+            assertThat(response.endsAt()).isNotNull();
         }
     }
 }

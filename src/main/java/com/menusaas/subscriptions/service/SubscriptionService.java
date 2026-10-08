@@ -60,9 +60,13 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public SubscriptionResponse getMySubscription() {
         Long restaurantId = SecurityUtils.currentRestaurantId();
-        return subscriptionRepository.findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(restaurantId, Subscription.STATUS_ACTIVE)
+        // Se devuelve la más reciente, vencida o no. Buscar solo la ACTIVE
+        // devolvía 404 a un restaurante con la suscripción caducada, sin
+        // distinguirlo de uno que nunca tuvo ninguna: no podía ver su estado ni
+        // entender que tenía que renovar, que es justo cuando debe pagar.
+        return subscriptionRepository.findFirstByRestaurantIdOrderByCreatedAtDesc(restaurantId)
                 .map(this::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException("El restaurante no tiene una suscripción activa"));
+                .orElseThrow(() -> new ResourceNotFoundException("El restaurante no tiene ninguna suscripción"));
     }
 
     /**

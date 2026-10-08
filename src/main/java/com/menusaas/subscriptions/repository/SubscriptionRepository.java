@@ -14,6 +14,13 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
 
     Optional<Subscription> findFirstByRestaurantIdAndStatusOrderByCreatedAtDesc(Long restaurantId, String status);
 
+    /**
+     * La más reciente sea cual sea su estado. Para que un restaurante con la
+     * suscripción vencida pueda VER que está vencida y renovar: si solo se
+     * busca la ACTIVE, receive un 404 indistinguible de "nunca tuvo una".
+     */
+    Optional<Subscription> findFirstByRestaurantIdOrderByCreatedAtDesc(Long restaurantId);
+
     List<Subscription> findByRestaurantIdAndStatusInOrderByCreatedAtDesc(Long restaurantId, Collection<String> statuses);
 
     /**
