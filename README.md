@@ -6,8 +6,9 @@ reportes de utilidad, suscripciones (ePayco/manual), archivos, QR, menú públic
 realtime por WebSocket y backoffice multi-tenant.
 
 Monolito modular (Java 21, Spring Boot 3.5, Maven): `com.menusaas.<modulo>` con
-`controller/dto/entity/repository/service`. Detalle en `docs/ARCHITECTURE.md` y
-convenciones en `docs/CONVENTIONS.md`.
+`controller/dto/entity/repository/service`. Detalle en `docs/ARCHITECTURE.md`,
+convenciones en `docs/CONVENTIONS.md` y migraciones (verificación, diagnóstico y
+reversión) en `docs/MIGRACIONES.md`.
 
 ## Levantar en local
 
