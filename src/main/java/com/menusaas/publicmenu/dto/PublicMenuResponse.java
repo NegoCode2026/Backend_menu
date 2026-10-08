@@ -69,14 +69,37 @@ public record PublicMenuResponse(
             String description,
             BigDecimal price,
             String imageUrl,
-            boolean available
+            boolean available,
+            /**
+             * Grupos de opciones que ofrece el producto ("Tamaño", "Término").
+             * Vacío si no tiene. Sin esto el cliente no puede elegir variantes y
+             * la carta no representa lo que el restaurante vende.
+             */
+            List<ModifierGroupInfo> modifierGroups
     ) {
-        /**
-         * @param imageUrl URL ya resuelta por el llamador (firmada o null).
-         */
         public static ProductInfo from(Product p, String imageUrl) {
-            return new ProductInfo(
-                    p.getId(), p.getName(), p.getDescription(), p.getPrice(), imageUrl, p.isAvailable());
+            return from(p, imageUrl, List.of());
         }
+
+        public static ProductInfo from(Product p, String imageUrl,
+                                       List<ModifierGroupInfo> modifierGroups) {
+            return new ProductInfo(
+                    p.getId(), p.getName(), p.getDescription(), p.getPrice(), imageUrl,
+                    p.isAvailable(), modifierGroups);
+        }
+    }
+
+    /** Grupo de opciones tal como lo ve el cliente: qué elegir y cuántas veces. */
+    public record ModifierGroupInfo(
+            Long id,
+            String name,
+            int minSelections,
+            int maxSelections,
+            boolean required,
+            List<ModifierOptionInfo> options
+    ) {
+    }
+
+    public record ModifierOptionInfo(Long id, String name, BigDecimal priceDelta) {
     }
 }

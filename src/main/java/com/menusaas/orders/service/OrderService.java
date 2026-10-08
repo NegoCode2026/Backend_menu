@@ -64,6 +64,7 @@ public class OrderService {
     private final PermissionService permissions;
     private final OrderPricing pricing;
     private final TableService tableService;
+    private final com.menusaas.modifiers.service.ModifierSelectionService modifierSelection;
 
     @Transactional
     public OrderResponse createPublicOrder(String slug, CreateOrderRequest request) {
@@ -109,6 +110,7 @@ public class OrderService {
         order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
 
         Order saved = orderRepository.save(order);
+        persistModifierSelections(saved);
         deductStock(saved);
         recordStatus(saved.getId(), null, OrderStatus.PENDING);
         log.info("Nuevo pedido recibido: num={}, restaurante={}, cliente={}, total={}",
@@ -143,6 +145,7 @@ public class OrderService {
         order.setOrderNumber(String.format("%s-%04d", generatePrefix(restaurant.getSlug()), count + 1));
 
         Order saved = orderRepository.save(order);
+        persistModifierSelections(saved);
         deductStock(saved);
         recordStatus(saved.getId(), null, OrderStatus.PENDING);
         log.info("Pedido creado por el restaurante: num={}, restauranteId={}, cliente={}, total={}",
@@ -392,7 +395,27 @@ public class OrderService {
 
     private OrderResponse withHistory(Order order) {
         return OrderResponse.from(order,
-                historyRepository.findByOrderIdOrderByChangedAtAsc(order.getId()));
+                historyRepository.findByOrderIdOrderByChangedAtAsc(order.getId()),
+                modifiersFor(List.of(order)));
+    }
+
+    /**
+     * Opciones de todos los items de estos pedidos, en UNA consulta.
+     *
+     * <p>Sin esto sería un SELECT por item, que es justo el N+1 que ya se corrigió
+     * para el historial. Aquí se reutiliza el mismo patrón de batch.
+     */
+    private Map<Long, List<com.menusaas.modifiers.entity.OrderItemModifier>> modifiersFor(List<Order> orders) {
+        List<Long> itemIds = orders.stream()
+                .filter(o -> o.getItems() != null)
+                .flatMap(o -> o.getItems().stream())
+                .map(com.menusaas.orders.entity.OrderItem::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        return modifierSelection.byOrderItemIds(itemIds);
     }
 
     private List<OrderResponse> withHistory(List<Order> orders) {
@@ -403,8 +426,10 @@ public class OrderService {
         Map<Long, List<OrderStatusHistory>> byOrder = historyRepository
                 .findByOrderIdInOrderByChangedAtAsc(ids).stream()
                 .collect(java.util.stream.Collectors.groupingBy(OrderStatusHistory::getOrderId));
+        Map<Long, List<com.menusaas.modifiers.entity.OrderItemModifier>> modifiersByItem = modifiersFor(orders);
         return orders.stream()
-                .map(o -> OrderResponse.from(o, byOrder.getOrDefault(o.getId(), List.of())))
+                .map(o -> OrderResponse.from(o, byOrder.getOrDefault(o.getId(), List.of()),
+                        modifiersByItem))
                 .toList();
     }
 
@@ -415,6 +440,35 @@ public class OrderService {
         }
         return (clean + "ORD").substring(0, 4);
     }
+
+    /**
+     * Guarda las opciones elegidas con su precio ya congelado.
+     *
+     * <p>Va aparte porque el id del item solo existe tras persistir el pedido, y
+     * hacerlo en un lote evita un INSERT por opción.
+     */
+    private void persistModifierSelections(Order order) {
+        var pending = pricing.pendingModifiers();
+        if (pending == null || pending.isEmpty()) {
+            return;
+        }
+        List<com.menusaas.modifiers.entity.OrderItemModifier> rows = new ArrayList<>();
+        for (OrderItem item : order.getItems()) {
+            List<com.menusaas.modifiers.entity.OrderItemModifier> mods = pending.get(item);
+            if (mods == null || mods.isEmpty()) {
+                continue;
+            }
+            for (var m : mods) {
+                m.setOrderItemId(item.getId());
+                rows.add(m);
+            }
+        }
+        if (!rows.isEmpty()) {
+            modifierSelection.persistAll(rows);
+            log.info("Opciones guardadas en el pedido {}: {}", order.getOrderNumber(), rows.size());
+        }
+    }
+
 }
 
 

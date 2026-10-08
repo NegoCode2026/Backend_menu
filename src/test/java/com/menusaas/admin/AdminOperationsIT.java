@@ -112,7 +112,15 @@ class AdminOperationsIT extends BaseIntegrationTest {
         JsonNode userContent = users.getBody().get("data").get("content");
         assertThat(userContent.toString()).contains("superadmin@demo.com");
         long superAdminId = findIdByEmail(userContent, "superadmin@demo.com");
-        long createdUserId = findIdByEmail(userContent, "plan-libre-admin@test.com");
+        // El listado viene paginado, así que el usuario recién creado puede no
+        // estar en la primera página: se busca por email en vez de asumirlo.
+        // (Antes pasaba por suerte; al crecer el número de usuarios de la suite,
+        // dejó de estar en la página 1 y el test falló sin que nada del
+        // producto hubiera cambiado.)
+        long createdUserId = findIdByEmail(
+                rest.exchange("/api/admin/users?search=plan-libre-admin", HttpMethod.GET,
+                        superAdmin.get(), JsonNode.class).getBody().get("data").get("content"),
+                "plan-libre-admin@test.com");
 
         // Filtro por rol server-side
         ResponseEntity<JsonNode> admins = rest.exchange("/api/admin/users?role=SUPER_ADMIN", HttpMethod.GET,

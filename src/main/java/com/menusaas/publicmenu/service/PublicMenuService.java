@@ -1,6 +1,9 @@
 package com.menusaas.publicmenu.service;
 
 import com.menusaas.categories.entity.Category;
+import com.menusaas.modifiers.entity.Modifier;
+import com.menusaas.modifiers.entity.ModifierGroup;
+import com.menusaas.modifiers.entity.ProductModifierGroup;
 import com.menusaas.categories.service.CategoryService;
 import com.menusaas.shared.security.SignedUrlService;
 import com.menusaas.publicmenu.dto.PublicMenuResponse;
@@ -15,6 +18,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +39,7 @@ public class PublicMenuService {
     private final ProductService productService;
     private final TableService tableService;
     private final SignedUrlService signedUrlService;
+    private final com.menusaas.modifiers.service.ModifierAdminService modifierAdmin;
 
     @Transactional(readOnly = true)
     @Cacheable(value = "publicMenu", key = "'listRestaurants'", unless = "#result == null")
@@ -51,12 +57,26 @@ public class PublicMenuService {
 
         List<Category> categories = categoryService.findActiveByRestaurantId(restaurant.getId());
 
+        List<Product> available = productService.findAvailableByRestaurantId(restaurant.getId());
+        Map<Long, List<PublicMenuResponse.ModifierGroupInfo>> groupsByProduct =
+                modifierAdmin.groupsForProducts(restaurant.getId(),
+                                available.stream().map(Product::getId).toList())
+                        .entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,
+                                e -> e.getValue().stream()
+                                        .map(g -> new PublicMenuResponse.ModifierGroupInfo(
+                                                g.id(), g.name(), g.minSelections(), g.maxSelections(),
+                                                g.required(),
+                                                g.options().stream()
+                                                        .map(o -> new PublicMenuResponse.ModifierOptionInfo(
+                                                                o.id(), o.name(), o.priceDelta()))
+                                                        .toList()))
+                                        .toList()));
+
         // Una sola query de productos y agrupación en memoria. Antes se
         // consultaba categoría por categoría: 1+N queries en el endpoint público
         // de más tráfico, y el N se dispara con cada categoría que añade el
         // restaurante.
-        List<Product> available = productService.findAvailableByRestaurantId(restaurant.getId());
-
         Map<Long, List<Product>> byCategory = available.stream()
                 .filter(p -> p.getCategoryId() != null)
                 .collect(java.util.stream.Collectors.groupingBy(Product::getCategoryId));
@@ -66,7 +86,7 @@ public class PublicMenuService {
                     List<PublicMenuResponse.ProductInfo> products = byCategory
                             .getOrDefault(category.getId(), List.of())
                             .stream()
-                            .map(this::toProductInfo)
+                            .map(p -> toProductInfo(p, groupsByProduct))
                             .toList();
                     return PublicMenuResponse.CategoryInfo.from(category, products);
                 })
@@ -76,7 +96,7 @@ public class PublicMenuService {
         // fetch, así que no cuesta una query extra.
         List<PublicMenuResponse.ProductInfo> loose = available.stream()
                 .filter(p -> p.getCategoryId() == null)
-                .map(this::toProductInfo)
+                .map(p -> toProductInfo(p, groupsByProduct))
                 .toList();
         if (!loose.isEmpty()) {
             categoryInfos.add(PublicMenuResponse.CategoryInfo.uncategorized(loose));
@@ -90,8 +110,15 @@ public class PublicMenuService {
         );
     }
 
-    private PublicMenuResponse.ProductInfo toProductInfo(Product p) {
+    /**
+     * @param groupsByProduct grupos de opciones por producto, cargados en un
+     *                        único fetch para no reintroducir un N+1 aquí.
+     */
+    private PublicMenuResponse.ProductInfo toProductInfo(Product p,
+            Map<Long, List<PublicMenuResponse.ModifierGroupInfo>> groupsByProduct) {
         return PublicMenuResponse.ProductInfo.from(
-                p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()));
+                p, signedUrlService.toSignedUrlOrNull(p.getImageUrl()),
+                groupsByProduct.getOrDefault(p.getId(), List.of()));
     }
+
 }

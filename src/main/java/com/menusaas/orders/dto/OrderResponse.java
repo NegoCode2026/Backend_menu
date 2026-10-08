@@ -9,6 +9,7 @@ import com.menusaas.orders.entity.PaymentMethod;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 public record OrderResponse(
         Long id,
@@ -35,10 +36,20 @@ public record OrderResponse(
         List<OrderStatusEvent> timeline
 ) {
     public static OrderResponse from(Order order) {
-        return from(order, List.of());
+        return from(order, List.of(), Map.of());
     }
 
+    /**
+     * @param modifiersByItemId opciones ya cargadas por id de item. Se pasan
+     *                           agrupadas desde el servicio para no hacer una
+     *                           consulta por item.
+     */
     public static OrderResponse from(Order order, List<OrderStatusHistory> history) {
+        return from(order, history, Map.of());
+    }
+
+    public static OrderResponse from(Order order, List<OrderStatusHistory> history,
+                                     Map<Long, List<com.menusaas.modifiers.entity.OrderItemModifier>> modifiersByItemId) {
         return new OrderResponse(
                 order.getId(),
                 order.getRestaurantId(),
@@ -61,7 +72,10 @@ public record OrderResponse(
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
                 order.getItems() != null
-                        ? order.getItems().stream().map(OrderItemResponse::from).toList()
+                        ? order.getItems().stream()
+                                .map(i -> OrderItemResponse.from(i,
+                                        modifiersByItemId.getOrDefault(i.getId(), List.of())))
+                                .toList()
                         : List.of(),
                 history.stream().map(OrderStatusEvent::from).toList()
         );
