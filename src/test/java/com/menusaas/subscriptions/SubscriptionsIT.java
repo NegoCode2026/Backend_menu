@@ -22,6 +22,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * listar planes, suscribirse, cambiar de plan, cancelar. Sin ePayco, la
  * suscripción queda activa de inmediato y sin URL de pago.
  */
+/**
+ * Modo manual (sin pasarela).
+ *
+ * <p>El perfil de pruebas trae claves ePayco ficticias para poder verificar el
+ * webhook firmado de punta a punta (EpaycoWebhookFlowIT). Aquí se anulan, porque
+ * este test comprueba el otro camino: suscribirse sin pasarela activa al
+ * instante. Con la clave puesta intentaría abrir un checkout de verdad.
+ */
+@org.springframework.test.context.TestPropertySource(properties = {
+        "app.payments.epayco-public-key=",
+        "app.payments.epayco-private-key="
+})
 class SubscriptionsIT extends BaseIntegrationTest {
 
     @Autowired

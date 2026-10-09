@@ -8,7 +8,14 @@ app:
   rate-limiting:
     auth-max-per-minute: 1000
   payments:
-    epayco-public-key: ""
-    epayco-private-key: ""
-    epayco-customer-id: ""
-    epayco-p-key: ""
+    # PUBLIC/PRIVATE_KEY ficticias: hacen que isConfigured() sea true, que es
+    # lo que selecciona la pasarela ePayco. Nunca se usa la red: el checkout
+    # no se abre en estos tests, solo se verifica el webhook firmado.
+    epayco-public-key: "pk_test_1111111111111111"
+    epayco-private-key: "sk_test_2222222222222222"
+    # Claves de FIRMA para probar el webhook de punta a punta. No son
+    # credenciales reales: solo permiten firmar un payload como lo haría ePayco
+    # para verificar contra ellas. PUBLIC/PRIVATE_KEY siguen vacías, así que
+    # el checkout no se intenta abrir contra la pasarela real.
+    epayco-customer-id: "1031111122222222"
+    epayco-p-key: "pk_test_9876543210abcdef"
