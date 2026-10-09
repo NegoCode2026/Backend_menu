@@ -73,6 +73,22 @@ app:
     # sin límite (un atacante que varía la IP generaba una clave por intento).
     max-keys: ${RATE_LIMIT_MAX_KEYS:20000}
   whatsapp:
+    # Aviso "tu pedido está listo" al cliente. Apagado por defecto.
+    # Ninguna de estas variables estaba documentada antes: se podía activar el
+    # interruptor sin credenciales y la llamada fallaba en silencio, con el
+    # personal creyendo que los clientes sí recibían el aviso.
+    # WhatsAppConfigValidator avisa al arrancar si se activa sin configurar bien.
+    #
+    # provider=meta (recomendado): requiere PHONE_NUMBER_ID y ACCESS_TOKEN de
+    #   Meta → WhatsApp → API de WhatsApp (Business Portfolio, nivel 1+).
+    # provider=webhook: delega en un servicio propio; requiere WHATSAPP_API_URL.
+    enabled: ${WHATSAPP_ENABLED:false}
+    provider: ${WHATSAPP_PROVIDER:meta}
+    api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v19.0}
+    phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+    access-token: ${WHATSAPP_ACCESS_TOKEN:}
+    default-country-code: ${WHATSAPP_DEFAULT_COUNTRY_CODE:57}
+    #
     # Las notificaciones se envían DENTRO de la transacción que actualiza el
     # pedido. Sin timeout, un proveedor colgado retiene conexión del pool y la
     # transacción indefinidamente: el pool se agota y cae toda la app.

@@ -97,15 +97,34 @@ public class WhatsAppNotificationService {
         }
     }
 
+    /**
+     * @return true solo si el mensaje se envió de verdad.
+     *
+     * <p>Antes el caso "no hay proveedor configurado" devolvía <b>true</b>:
+     * nada salía y la API respondía "notificación enviada". Para un restaurante
+     * eso es peor que un fallo, porque cree que sus clientes reciben el aviso y
+     * deja de comprobarlo. Ahora se devuelve false y se avisa con un ERROR.
+     */
     private boolean sendOnce(String cleanPhone, String message, Order order) {
-        if ("meta".equalsIgnoreCase(provider) && !phoneNumberId.isBlank() && !accessToken.isBlank()) {
+        if ("meta".equalsIgnoreCase(provider)) {
+            if (phoneNumberId.isBlank() || accessToken.isBlank()) {
+                log.error("WhatsApp configurado como 'meta' pero falta PHONE_NUMBER_ID o ACCESS_TOKEN. "
+                        + "No se envió nada al pedido {}", order.getOrderNumber());
+                return false;
+            }
             return sendMetaCloudApi(cleanPhone, message);
-        } else if ("webhook".equalsIgnoreCase(provider) && !apiUrl.isBlank()) {
-            return sendWebhook(cleanPhone, message, order);
-        } else {
-            log.info("📢 [WhatsApp SERVIDOR SENT] Mensaje procesado exitosamente para +{}: \"{}\"", cleanPhone, message);
-            return true;
         }
+        if ("webhook".equalsIgnoreCase(provider)) {
+            if (apiUrl.isBlank()) {
+                log.error("WhatsApp configurado como 'webhook' pero falta WHATSAPP_API_URL. "
+                        + "No se envió nada al pedido {}", order.getOrderNumber());
+                return false;
+            }
+            return sendWebhook(cleanPhone, message, order);
+        }
+        log.error("WhatsApp habilitado con provider desconocido '{}' (usa meta o webhook). "
+                + "No se envió nada al pedido {}.", provider, order.getOrderNumber());
+        return false;
     }
 
     private boolean sendMetaCloudApi(String toPhone, String textBody) {
