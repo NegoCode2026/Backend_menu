@@ -36,6 +36,8 @@ public record CreateOrderRequest(
 
         @NotEmpty(message = "El pedido debe contener al menos un producto")
         @Valid
-        List<OrderItemRequest> items
+        List<OrderItemRequest> items,
+
+        java.util.UUID requestId
 ) {
 }

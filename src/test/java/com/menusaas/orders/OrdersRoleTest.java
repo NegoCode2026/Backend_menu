@@ -100,7 +100,7 @@ class OrdersRoleTest {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             security.when(SecurityUtils::currentUser).thenReturn(principal(Role.WAITER));
-            when(orderRepository.findByIdAndRestaurantId(1L, 1L))
+            when(orderRepository.lockRestaurantOrder(1L, 1L))
                     .thenReturn(Optional.of(order(1L, OrderStatus.PENDING)));
 
             assertThatThrownBy(() -> orderService.updateStatusMine(1L, OrderStatus.CANCELLED))
@@ -114,7 +114,7 @@ class OrdersRoleTest {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             security.when(SecurityUtils::currentUser).thenReturn(principal(Role.WAITER));
-            when(orderRepository.findByIdAndRestaurantId(1L, 1L))
+            when(orderRepository.lockRestaurantOrder(1L, 1L))
                     .thenReturn(Optional.of(order(1L, OrderStatus.PENDING)));
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -129,7 +129,7 @@ class OrdersRoleTest {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             security.when(SecurityUtils::currentUser).thenReturn(principal(Role.WAITER));
-            when(orderRepository.findByIdAndRestaurantId(1L, 1L))
+            when(orderRepository.lockRestaurantOrder(1L, 1L))
                     .thenReturn(Optional.of(order(1L, OrderStatus.CONFIRMED)));
 
             assertThatThrownBy(() -> orderService.updateStatusMine(1L, OrderStatus.IN_PREPARATION))
@@ -142,7 +142,7 @@ class OrdersRoleTest {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             security.when(SecurityUtils::currentUser).thenReturn(principal(Role.WAITER));
-            when(orderRepository.findByIdAndRestaurantId(1L, 1L))
+            when(orderRepository.lockRestaurantOrder(1L, 1L))
                     .thenReturn(Optional.of(order(1L, OrderStatus.DELIVERED)));
 
             assertThatThrownBy(() -> orderService.payMine(1L, PaymentMethod.CASH))
@@ -151,7 +151,7 @@ class OrdersRoleTest {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
             security.when(SecurityUtils::currentUser).thenReturn(principal(Role.CASHIER));
-            when(orderRepository.findByIdAndRestaurantId(2L, 1L))
+            when(orderRepository.lockRestaurantOrder(1L, 2L))
                     .thenReturn(Optional.of(order(2L, OrderStatus.DELIVERED)));
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 

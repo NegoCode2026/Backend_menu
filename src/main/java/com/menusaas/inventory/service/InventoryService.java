@@ -33,6 +33,11 @@ public class InventoryService {
     private final IngredientRepository ingredientRepository;
     private final RecipeItemRepository recipeItemRepository;
 
+    @Transactional(readOnly = true)
+    public List<com.menusaas.inventory.dto.RecipeCapacity> recipeCapacitiesMine() {
+        return recipeItemRepository.capacitiesForRestaurant(SecurityUtils.currentRestaurantId());
+    }
+
     /** Registro interno de producto (llamado por ProductService en la misma transacción). */
     public StockMovement record(Long restaurantId, Long productId, int quantity,
                                 MovementReason reason, Long orderId) {

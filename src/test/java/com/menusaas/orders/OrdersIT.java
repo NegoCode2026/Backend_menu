@@ -478,6 +478,84 @@ class OrdersIT extends BaseIntegrationTest {
         assertThat(editOther.getStatusCode().value()).isEqualTo(404);
     }
 
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate sql;
+
+    @Test
+    void yesterdayOrderIsPayableOnceAndClosingRetainsTheOriginal() throws Exception {
+        var owner = TestHttp.register(rest, objectMapper, "Turno", "turno-caja@test.com", "turno-caja");
+        long product = createProduct(owner, "Plato", 12000);
+        var created = postPublicOrder("turno-caja", Map.of("customerName", "Mesa 5",
+                "items", List.of(Map.of("productId", product, "quantity", 1))));
+        long id = created.getBody().at("/data/id").asLong();
+        for (String status : List.of("CONFIRMED", "IN_PREPARATION", "READY", "DELIVERED")) {
+            var updated = rest.exchange("/api/orders/" + id + "/status", HttpMethod.PATCH,
+                    TestHttp.body(objectMapper, Map.of("status", status), owner), JsonNode.class);
+            assertThat(updated.getStatusCode().value()).isEqualTo(200);
+        }
+        sql.update("update orders set created_at = now() - interval '2 days' where id = ?", id);
+        var before = rest.exchange("/api/cash/today", HttpMethod.GET, owner.get(), JsonNode.class);
+        assertThat(before.getBody().at("/data/unpaidDelivered").asLong()).isEqualTo(1);
+        var cash = TestHttp.body(objectMapper, Map.of("paymentMethod", "CASH"), owner);
+        String payUrl = "/api/orders/" + id + "/pay";
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> rest.postForEntity(payUrl, cash, JsonNode.class));
+            var second = pool.submit(() -> rest.postForEntity(payUrl, cash, JsonNode.class));
+            var a = first.get(20, TimeUnit.SECONDS);
+            var b = second.get(20, TimeUnit.SECONDS);
+            assertThat(a.getStatusCode().value()).isEqualTo(200);
+            assertThat(b.getStatusCode().value()).isEqualTo(200);
+            assertThat(a.getBody().at("/data/paidAt").asText()).isEqualTo(b.getBody().at("/data/paidAt").asText());
+        } finally { pool.shutdownNow(); }
+        assertThat(rest.postForEntity(payUrl, TestHttp.body(objectMapper,
+                Map.of("paymentMethod", "CARD"), owner), JsonNode.class).getStatusCode().value()).isEqualTo(409);
+        var close = rest.postForEntity("/api/cash/close", TestHttp.body(objectMapper,
+                Map.of("countedCash", 12000), owner), JsonNode.class);
+        assertThat(close.getBody().at("/data/expectedCash").asInt()).isEqualTo(12000);
+        long closing = close.getBody().at("/data/id").asLong();
+        var corrected = rest.postForEntity("/api/cash/close", TestHttp.body(objectMapper,
+                Map.of("countedCash", 11900, "notes", "Segundo conteo"), owner), JsonNode.class);
+        assertThat(corrected.getBody().at("/data/difference").asInt()).isEqualTo(-100);
+        assertThat(sql.queryForObject("select (previous_count->>'counted_cash')::numeric::int from cash_closing_revisions where closing_id = ?", Integer.class, closing)).isEqualTo(12000);
+    }
+
+    @Test
+    void inventoryAdviceScopesSharedRecipesToTheRestaurant() throws Exception {
+        var owner = TestHttp.register(rest, objectMapper, "Chef", "chef-capacity@test.com", "chef-capacity");
+        var other = TestHttp.register(rest, objectMapper, "Otro", "other-capacity@test.com", "other-capacity");
+        long product = createProduct(owner, "Pollo", 12000);
+        var ingredient = rest.postForEntity("/api/inventory/ingredients", TestHttp.body(objectMapper,
+                Map.of("name","Pollo crudo","unit","g","stockQuantity",1500),owner),JsonNode.class);
+        long ingredientId = ingredient.getBody().at("/data/id").asLong();
+        var recipe = rest.exchange("/api/products/" + product + "/recipe",HttpMethod.PUT,TestHttp.body(objectMapper,
+                List.of(Map.of("ingredientId",ingredientId,"quantity",250)),owner),JsonNode.class);
+        assertThat(recipe.getStatusCode().value()).isEqualTo(200);
+        String url = "/api/inventory/recipe-capacities";
+        var result = rest.exchange(url,HttpMethod.GET,owner.get(),JsonNode.class);
+        assertThat(result.getBody().at("/data/0/servings").asInt()).isEqualTo(6);
+        assertThat(rest.exchange(url,HttpMethod.GET,other.get(),JsonNode.class).getBody().get("data")).isEmpty();
+    }
+
+    @Test
+    void publicCheckoutRespectsPricesAndReplaysOnlyTheSameBasket() throws Exception {
+        var owner = TestHttp.register(rest, objectMapper, "Checkout", "checkout-retry@test.com", "checkout-retry");
+        long id = createProduct(owner, "Almuerzo", 12000);
+        var body = new java.util.HashMap<String, Object>();
+        body.put("customerName", "Mesa 4");
+        body.put("requestId", java.util.UUID.randomUUID().toString());
+        body.put("items", List.of(Map.of("productId", id, "quantity", 1)));
+        body.put("discountAmount", 1000);
+        assertThat(postPublicOrder("checkout-retry", body).getStatusCode().value()).isEqualTo(400);
+        body.remove("discountAmount");
+        var first = postPublicOrder("checkout-retry", body);
+        var retry = postPublicOrder("checkout-retry", body);
+        assertThat(first.getStatusCode().value()).isEqualTo(201);
+        assertThat(retry.getBody().at("/data/id")).isEqualTo(first.getBody().at("/data/id"));
+        body.put("items", List.of(Map.of("productId", id, "quantity", 2)));
+        assertThat(postPublicOrder("checkout-retry", body).getStatusCode().value()).isEqualTo(409);
+    }
+
     @Test
     void publicOrders_concurrentCreation_hasUniqueNumbers() throws Exception {
         // Crear restaurante con producto y lanzar 2 pedidos concurrentes: el lock

@@ -63,6 +63,10 @@ public class Restaurant {
     @Column(name = "open", nullable = false)
     private boolean open = true;
 
+    @Builder.Default
+    @Column(name = "business_zone", nullable = false)
+    private String businessZone = "America/Bogota";
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

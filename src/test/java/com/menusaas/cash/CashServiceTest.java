@@ -39,9 +39,13 @@ class CashServiceTest {
 
     private CashService service;
 
+    @Mock
+    private com.menusaas.restaurants.service.RestaurantService restaurants;
+
     @BeforeEach
     void setUp() {
-        service = new CashService(orderService, closingRepository);
+        when(restaurants.businessZone(1L)).thenReturn(java.time.ZoneId.of("America/Bogota"));
+        service = new CashService(orderService, closingRepository, restaurants);
     }
 
     private Order delivered(String total, PaymentMethod method) {
@@ -61,7 +65,7 @@ class CashServiceTest {
     void today_groupsByPaymentMethod() {
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(orderService.findDeliveredBetween(
+            when(orderService.cashLedger(
                     eq(1L), any(), any()))
                     .thenReturn(List.of(
                             delivered("20000", PaymentMethod.CASH),
@@ -89,7 +93,7 @@ class CashServiceTest {
             java.time.Instant t1 = java.time.Instant.parse("2026-09-25T10:00:00Z");
             java.time.Instant t2 = java.time.Instant.parse("2026-09-25T11:00:00Z");
             java.time.Instant t3 = java.time.Instant.parse("2026-09-25T12:00:00Z");
-            when(orderService.findDeliveredBetween(
+            when(orderService.cashLedger(
                     eq(1L), any(), any()))
                     .thenReturn(List.of(
                             delivered("20000", PaymentMethod.CASH, t1),
@@ -119,7 +123,7 @@ class CashServiceTest {
     @Test
     void close_computesDifference() {        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::currentRestaurantId).thenReturn(1L);
-            when(orderService.findDeliveredBetween(
+            when(orderService.cashLedger(
                     eq(1L), any(), any()))
                     .thenReturn(List.of(delivered("20000", PaymentMethod.CASH)));
             when(closingRepository.findByRestaurantIdAndBusinessDate(eq(1L), any(LocalDate.class)))
@@ -127,6 +131,7 @@ class CashServiceTest {
             when(closingRepository.save(any(CashClosing.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
+            security.when(SecurityUtils::currentUser).thenReturn(mock(com.menusaas.auth.security.UserPrincipal.class));
             CashClosingResponse r = service.closeToday(new CloseCashRequest(new BigDecimal("19500"), null));
 
             assertThat(r.expectedCash()).isEqualByComparingTo("20000");

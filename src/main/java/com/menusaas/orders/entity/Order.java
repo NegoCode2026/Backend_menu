@@ -29,6 +29,10 @@ public class Order implements com.menusaas.shared.tenancy.TenantOwned {
     @Column(name = "order_number", nullable = false, length = 30)
     private String orderNumber;
 
+    private java.util.UUID requestId;
+    private String requestHash;
+    private Long discountedBy;
+
     @Column(name = "tracking_code", length = 36)
     private String trackingCode;
 

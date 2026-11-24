@@ -20,6 +20,26 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     Optional<Order> findByIdAndRestaurantId(Long id, Long restaurantId);
 
+    Optional<Order> findByRestaurantIdAndRequestId(Long restaurantId, java.util.UUID requestId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from Order o where o.restaurantId = :restaurantId and o.id = :id")
+    Optional<Order> lockRestaurantOrder(Long restaurantId, Long id);
+
+    @Query("""
+            select o from Order o where o.restaurantId = :restaurantId and o.status = :status
+            and (o.paymentMethod is null or
+                 (coalesce(o.paidAt,o.updatedAt) >= :from and coalesce(o.paidAt,o.updatedAt) < :to))
+            order by o.createdAt desc
+            """)
+    List<Order> cashLedgerForRestaurant(Long restaurantId, OrderStatus status, Instant from, Instant to);
+
+    @Query("""
+            select o from Order o where o.restaurantId = :restaurantId and o.status = :status
+            and coalesce(o.deliveredAt,o.createdAt) >= :from and coalesce(o.deliveredAt,o.createdAt) < :to
+            """)
+    List<Order> deliveredForRestaurantBetween(Long restaurantId, OrderStatus status, Instant from, Instant to);
+
     Optional<Order> findByTrackingCode(String trackingCode);
 
     java.util.List<Order> findByRestaurantIdAndStatusAndCreatedAtBetween(
