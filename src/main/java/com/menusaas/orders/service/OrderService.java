@@ -72,6 +72,20 @@ public class OrderService {
         // Se resuelve vía RestaurantService para no tocar su repositorio directamente.
         Restaurant restaurant = restaurantService.findActiveBySlugForUpdateOrThrow(slug);
 
+        if (request.discountAmount() != null && request.discountAmount().signum() != 0) {
+            throw new BadRequestException("El descuento debe ser autorizado por el restaurante");
+        }
+        String requestHash = null;
+        if (request.requestId() != null) {
+            requestHash = fingerprint(request);
+            var existing = orderRepository.findByRestaurantIdAndRequestId(restaurant.getId(), request.requestId());
+            if (existing.isPresent()) {
+                if (!requestHash.equals(existing.get().getRequestHash())) {
+                    throw new com.menusaas.shared.api.ConflictException("La referencia ya pertenece a otro pedido");
+                }
+                return withHistory(existing.get());
+            }
+        }
         if (!restaurant.isOpen()) {
             throw new BadRequestException("El restaurante está cerrado en este momento y no puede recibir pedidos. Inténtalo más tarde.");
         }
@@ -80,6 +94,8 @@ public class OrderService {
 
         Order order = Order.builder()
                 .restaurantId(restaurantId)
+                .requestId(request.requestId())
+                .requestHash(requestHash)
                 .customerName(request.customerName().trim())
                 .customerPhone(request.customerPhone() != null ? request.customerPhone().trim() : null)
                 .tableNumber(request.tableNumber() != null ? request.tableNumber().trim() : null)
@@ -102,7 +118,7 @@ public class OrderService {
             }
         }
 
-        pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
+        pricing.applyItems(order, restaurantId, request.items(), BigDecimal.ZERO, request.tipAmount());
 
         // Generación de consecutivo de pedido (ej. FMIX-0001)
         long count = orderRepository.countOrdersForRestaurant(restaurantId);
@@ -137,6 +153,7 @@ public class OrderService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
+        authorizeDiscount(order, request.discountAmount());
         pricing.applyItems(order, restaurantId, request.items(), request.discountAmount(), request.tipAmount());
 
         long count = orderRepository.countOrdersForRestaurant(restaurantId);
@@ -151,6 +168,27 @@ public class OrderService {
         OrderResponse response = withHistory(saved);
         orderEvents.orderCreated(response);
         return response;
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectWriter ORDER_JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper().writerFor(CreateOrderRequest.class);
+
+    private static String fingerprint(CreateOrderRequest request) {
+        try {
+            byte[] data = ORDER_JSON.writeValueAsBytes(request);
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(data));
+        } catch (java.security.NoSuchAlgorithmException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("No se pudo identificar el pedido", ex);
+        }
+    }
+
+    private void authorizeDiscount(Order order, BigDecimal discount) {
+        if (discount != null && discount.signum() > 0) {
+            permissions.require(Permissions.ORDERS_EDIT);
+            order.setDiscountedBy(SecurityUtils.currentUser().getId());
+        } else {
+            order.setDiscountedBy(null);
+        }
     }
 
     private String manualCustomerName(CreateManualOrderRequest request) {
@@ -171,7 +209,8 @@ public class OrderService {
     @Transactional
     public OrderResponse updateMine(Long id, UpdateOrderRequest request) {
         permissions.require(Permissions.ORDERS_EDIT);
-        Order order = getMineOrder(id);
+        restaurantService.findByIdForUpdateOrThrow(SecurityUtils.currentRestaurantId());
+        Order order = lockMine(id);
         guardEditable(order);
 
         if (request.customerName() != null) {
@@ -197,23 +236,28 @@ public class OrderService {
                 throw new BadRequestException("El pedido debe contener al menos un producto");
             }
             // Los ítems cambian: se devuelve el stock anterior y se descuenta el nuevo.
+            authorizeDiscount(order, request.discountAmount());
             restoreStock(order);
             pricing.applyItems(order, order.getRestaurantId(), request.items(), request.discountAmount(), request.tipAmount());
+            deductStock(order);
         }
 
         Order updated = orderRepository.save(order);
-        deductStock(updated);
         log.info("Pedido editado: id={}, num={}", updated.getId(), updated.getOrderNumber());
         return withHistory(updated);
     }
 
     @Transactional(readOnly = true)
-    public List<OrderResponse> listMine(OrderStatus status, Instant since, Integer page, Integer size) {
+    public List<OrderResponse> listMine(OrderStatus status, Instant since, Integer page, Integer size, boolean activeOnly) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
 
         Specification<Order> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("restaurantId"), restaurantId));
+            if (activeOnly) {
+                predicates.add(root.get("status").in(OrderStatus.PENDING, OrderStatus.CONFIRMED,
+                        OrderStatus.IN_PREPARATION, OrderStatus.READY));
+            }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }
@@ -223,10 +267,11 @@ public class OrderService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt", "id");
         List<Order> orders;
 
         if (page != null && size != null) {
+            if (page < 0 || size < 1 || size > 200) throw new BadRequestException("Paginación fuera de rango");
             Page<Order> result = orderRepository.findAll(spec, PageRequest.of(page, size, sort));
             orders = result.getContent();
         } else {
@@ -251,11 +296,14 @@ public class OrderService {
 
     @Transactional
     public OrderResponse updateStatusMine(Long id, OrderStatus newStatus) {
-        Order order = getMineOrder(id);
+        if (newStatus == OrderStatus.CANCELLED) restaurantService.findByIdForUpdateOrThrow(SecurityUtils.currentRestaurantId());
+        Order order = lockMine(id);
         OrderStatus current = order.getStatus();
 
-        OrderStatusMachine.requireAllowed(current, newStatus);
+        if (current != newStatus) OrderStatusMachine.requireAllowed(current, newStatus);
+        if (newStatus == OrderStatus.PENDING) throw new BadRequestException("El pedido ya está pendiente");
         permissions.require(OrderStatusMachine.permissionFor(newStatus));
+        if (current == newStatus) return withHistory(order);
 
         order.applyStatus(newStatus);
         Order updated = orderRepository.save(order);
@@ -292,13 +340,18 @@ public class OrderService {
      */
     @Transactional
     public OrderResponse payMine(Long id, com.menusaas.orders.entity.PaymentMethod paymentMethod) {
-        Order order = getMineOrder(id);
+        restaurantService.findByIdForUpdateOrThrow(SecurityUtils.currentRestaurantId());
+        Order order = lockMine(id);
         if (order.getStatus() != OrderStatus.DELIVERED) {
             throw new BadRequestException("Solo se puede cobrar un pedido entregado");
         }
         permissions.require(Permissions.CASH_CHARGE);
+        if (order.getPaymentMethod() == paymentMethod) return withHistory(order);
+        if (order.getPaymentMethod() != null) {
+            throw new com.menusaas.shared.api.ConflictException("El pedido ya tiene otro medio de pago registrado");
+        }
         order.setPaymentMethod(paymentMethod);
-        order.setPaidAt(java.time.Instant.now());
+        order.setPaidAt(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
         Order updated = orderRepository.save(order);
         log.info("Pedido cobrado: id={}, num={}, método={}", updated.getId(), updated.getOrderNumber(), paymentMethod);
         OrderResponse response = withHistory(updated);
@@ -306,6 +359,16 @@ public class OrderService {
         // ven "cobrada" sin recargar (notificaciones opt-in del staff).
         orderEvents.statusChanged(response);
         return response;
+    }
+
+    private Order lockMine(Long id) {
+        return orderRepository.lockRestaurantOrder(SecurityUtils.currentRestaurantId(), id)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Order> cashLedger(Long restaurantId, Instant from, Instant to) {
+        return orderRepository.cashLedgerForRestaurant(restaurantId, OrderStatus.DELIVERED, from, to);
     }
 
     private Order getMineOrder(Long id) {
@@ -333,7 +396,7 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public List<Order> findDeliveredBetween(Long restaurantId, Instant from, Instant to) {
-        return orderRepository.findByRestaurantIdAndStatusAndCreatedAtBetween(
+        return orderRepository.deliveredForRestaurantBetween(
                 restaurantId, OrderStatus.DELIVERED, from, to);
     }
 

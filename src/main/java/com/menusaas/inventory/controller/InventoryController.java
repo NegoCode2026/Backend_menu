@@ -29,6 +29,11 @@ public class InventoryController {
 
     private final InventoryService inventoryService;
 
+    @GetMapping("/recipe-capacities")
+    public ApiResponse<List<com.menusaas.inventory.dto.RecipeCapacity>> recipeCapacities() {
+        return ApiResponse.ok(inventoryService.recipeCapacitiesMine());
+    }
+
     @Operation(summary = "Kardex del restaurante (?productId=&page=&size=)")
     @GetMapping("/movements")
     public ApiResponse<Page<StockMovementResponse>> movements(

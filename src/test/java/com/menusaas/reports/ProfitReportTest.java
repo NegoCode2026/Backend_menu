@@ -34,9 +34,13 @@ class ProfitReportTest {
 
     private ProfitReportService service;
 
+    @Mock
+    private com.menusaas.restaurants.service.RestaurantService restaurants;
+
     @BeforeEach
     void setUp() {
-        service = new ProfitReportService(orderService);
+        when(restaurants.businessZone(1L)).thenReturn(java.time.ZoneId.of("America/Bogota"));
+        service = new ProfitReportService(orderService, restaurants);
     }
 
     private Order delivered(long id, LocalDate day, String total, String unitCost, int qty) throws Exception {
@@ -52,7 +56,7 @@ class ProfitReportTest {
         // createdAt es @CreationTimestamp: se fija por reflexión para el test
         Field createdAt = Order.class.getDeclaredField("createdAt");
         createdAt.setAccessible(true);
-        createdAt.set(order, day.atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(3600));
+        createdAt.set(order, day.atStartOfDay(java.time.ZoneId.of("America/Bogota")).toInstant().plusSeconds(3600));
         return order;
     }
 

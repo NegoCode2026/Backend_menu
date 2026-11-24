@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 
 /**
@@ -31,16 +30,18 @@ public class CashService {
 
     private final OrderService orderService;
     private final CashClosingRepository closingRepository;
+    private final com.menusaas.restaurants.service.RestaurantService restaurants;
 
     @Transactional(readOnly = true)
     public CashTodayResponse today() {
         Long restaurantId = SecurityUtils.currentRestaurantId();
-        LocalDate date = LocalDate.now(ZoneOffset.UTC);
+        var zone = restaurants.businessZone(restaurantId);
+        LocalDate date = LocalDate.now(zone);
 
-        List<Order> delivered = orderService.findDeliveredBetween(
+        List<Order> delivered = orderService.cashLedger(
                 restaurantId,
-                date.atStartOfDay(ZoneOffset.UTC).toInstant(),
-                date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant());
+                date.atStartOfDay(zone).toInstant(),
+                date.plusDays(1).atStartOfDay(zone).toInstant());
 
         BigDecimal cash = BigDecimal.ZERO;
         BigDecimal card = BigDecimal.ZERO;
@@ -85,8 +86,9 @@ public class CashService {
     @Transactional
     public CashClosingResponse closeToday(CloseCashRequest request) {
         Long restaurantId = SecurityUtils.currentRestaurantId();
-        LocalDate date = LocalDate.now(ZoneOffset.UTC);
+        restaurants.findByIdForUpdateOrThrow(restaurantId);
         CashTodayResponse expected = today();
+        LocalDate date = expected.date();
 
         CashClosing closing = closingRepository
                 .findByRestaurantIdAndBusinessDate(restaurantId, date)
@@ -94,15 +96,21 @@ public class CashService {
                         .restaurantId(restaurantId)
                         .businessDate(date)
                         .build());
+        if (closing.getId() != null) {
+            if (closing.getCountedCash().compareTo(request.countedCash()) == 0
+                    && closing.getExpectedCash().compareTo(expected.expectedCash()) == 0
+                    && java.util.Objects.equals(closing.getNotes(), request.notes())) {
+                return CashClosingResponse.from(closing);
+            }
+            if (request.notes() == null || request.notes().isBlank()) {
+                throw new com.menusaas.shared.api.BadRequestException("Indica el motivo de la corrección");
+            }
+        }
         closing.setExpectedCash(expected.expectedCash());
         closing.setCountedCash(request.countedCash());
         closing.setDifference(request.countedCash().subtract(expected.expectedCash()));
         closing.setNotes(request.notes() != null ? request.notes().trim() : null);
-        try {
-            closing.setClosedBy(SecurityUtils.currentUser().getId());
-        } catch (Exception ignored) {
-            // Sin contexto (nunca debería pasar con auth, pero no rompe el cierre)
-        }
+        closing.setClosedBy(SecurityUtils.currentUser().getId());
         return CashClosingResponse.from(closingRepository.save(closing));
     }
 

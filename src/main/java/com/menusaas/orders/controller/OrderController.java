@@ -33,8 +33,9 @@ public class OrderController {
     public ApiResponse<List<OrderResponse>> list(@RequestParam(required = false) OrderStatus status,
                                                  @RequestParam(required = false) Instant since,
                                                  @RequestParam(required = false) Integer page,
-                                                 @RequestParam(required = false) Integer size) {
-        return ApiResponse.ok(orderService.listMine(status, since, page, size));
+                                                 @RequestParam(required = false) Integer size,
+                                                 @RequestParam(defaultValue = "false") boolean activeOnly) {
+        return ApiResponse.ok(orderService.listMine(status, since, page, size, activeOnly));
     }
 
     @Operation(summary = "Crear un pedido manualmente (teléfono o presencial; nombre opcional)")

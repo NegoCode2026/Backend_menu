@@ -82,6 +82,10 @@ public class RestaurantService {
         return restaurantRepository.getReferenceById(id);
     }
 
+    public java.time.ZoneId businessZone(Long restaurantId) {
+        return java.time.ZoneId.of(findByIdOrThrow(restaurantId).getBusinessZone());
+    }
+
     private Restaurant update(Restaurant restaurant, RestaurantRequest request) {
         String slug = request.slug().trim();
         if (!slug.equals(restaurant.getSlug()) && restaurantRepository.existsBySlug(slug)) {
