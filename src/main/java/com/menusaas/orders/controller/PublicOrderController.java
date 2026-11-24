@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Public Orders", description = "Recepción de pedidos desde el menú público")
@@ -21,15 +23,16 @@ public class PublicOrderController {
 
     @Operation(summary = "Crear un nuevo pedido desde el menú digital (sin autenticación)")
     @PostMapping("/{slug}")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<OrderResponse> createOrder(@PathVariable String slug,
+    public ResponseEntity<ApiResponse<OrderResponse>> createOrder(@PathVariable String slug,
                                                   @Valid @RequestBody CreateOrderRequest request) {
-        return ApiResponse.ok("Pedido recibido exitosamente", orderService.createPublicOrder(slug, request));
+        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok("Pedido recibido exitosamente", orderService.createPublicOrder(slug, request)));
     }
 
     @Operation(summary = "Consultar el estado de un pedido por su código de seguimiento (sin autenticación)")
     @GetMapping("/track/{trackingCode}")
-    public ApiResponse<OrderResponse> track(@PathVariable String trackingCode) {
-        return ApiResponse.ok(orderService.trackPublicOrder(trackingCode));
+    public ResponseEntity<ApiResponse<OrderResponse>> track(@PathVariable String trackingCode) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(orderService.trackPublicOrder(trackingCode)));
     }
 }

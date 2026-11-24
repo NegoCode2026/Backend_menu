@@ -31,6 +31,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                        @Param("restaurantId") Long restaurantId,
                                        @Param("onlyAvailable") boolean onlyAvailable);
 
+    @Query("""
+            select p from Product p
+            where p.restaurantId = :restaurantId and p.available = true
+              and (p.categoryId is null or exists (
+                    select c.id from Category c where c.id = p.categoryId
+                    and c.restaurantId = :restaurantId and c.active = true))
+            order by p.position, p.name, p.id
+            """)
+    List<Product> findPublicMenuProductsByRestaurantId(@Param("restaurantId") Long restaurantId);
+
     /**
      * Conteo de productos agrupado por restaurante (panel admin: evita N+1).
      */

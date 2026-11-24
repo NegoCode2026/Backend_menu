@@ -13,7 +13,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Menú público: sin autenticación, identificado por slug.
@@ -38,24 +41,18 @@ public class PublicMenuService {
 
         List<Category> categories = categoryService.findActiveByRestaurantId(restaurant.getId());
 
-        List<PublicMenuResponse.CategoryInfo> categoryInfos = categories.stream()
-                .map(category -> {
-                    List<PublicMenuResponse.ProductInfo> products = productService
-                            .findAvailableByCategory(category.getId(), restaurant.getId())
-                            .stream()
-                            .map(this::toProductInfo)
-                            .toList();
-                    return PublicMenuResponse.CategoryInfo.from(category, products);
-                })
-                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
-
-        // Productos sin categoría: grupo final "Sin categoría".
-        List<PublicMenuResponse.ProductInfo> loose = productService
-                .findUncategorized(restaurant.getId())
-                .stream()
-                .filter(Product::isAvailable)
-                .map(this::toProductInfo)
-                .toList();
+        Map<Long, List<PublicMenuResponse.ProductInfo>> byCategory = new HashMap<>();
+        List<PublicMenuResponse.ProductInfo> loose = new ArrayList<>();
+        for (Product product : productService.findPublicMenuProductsByRestaurantId(restaurant.getId())) {
+            var items = product.getCategoryId() == null ? loose
+                    : byCategory.computeIfAbsent(product.getCategoryId(), ignored -> new ArrayList<>());
+            items.add(toProductInfo(product));
+        }
+        List<PublicMenuResponse.CategoryInfo> categoryInfos = new ArrayList<>();
+        for (Category category : categories) {
+            categoryInfos.add(PublicMenuResponse.CategoryInfo.from(category,
+                    byCategory.getOrDefault(category.getId(), List.of())));
+        }
         if (!loose.isEmpty()) {
             categoryInfos.add(PublicMenuResponse.CategoryInfo.uncategorized(loose));
         }
