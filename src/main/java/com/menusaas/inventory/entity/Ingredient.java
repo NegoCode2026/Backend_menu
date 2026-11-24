@@ -21,6 +21,9 @@ public class Ingredient implements com.menusaas.shared.tenancy.TenantOwned {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private long version;
+
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 

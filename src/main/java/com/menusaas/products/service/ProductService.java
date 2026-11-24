@@ -100,13 +100,8 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<Product> findAvailableByCategory(Long categoryId, Long restaurantId) {
-        return productRepository.findByCategoryScoped(categoryId, restaurantId, true);
-    }
-
-    @Transactional(readOnly = true)
-    public java.util.List<Product> findUncategorized(Long restaurantId) {
-        return productRepository.findByRestaurantIdAndCategoryIdIsNullOrderByPositionAsc(restaurantId);
+    public java.util.List<Product> findPublicMenuProductsByRestaurantId(Long restaurantId) {
+        return productRepository.findPublicMenuProductsByRestaurantId(restaurantId);
     }
 
     /** Ajuste manual a una existencia absoluta (reposición o conteo). */

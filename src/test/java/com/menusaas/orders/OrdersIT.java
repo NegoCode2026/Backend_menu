@@ -12,7 +12,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -557,6 +561,60 @@ class OrdersIT extends BaseIntegrationTest {
     }
 
     @Test
+    void sixSimultaneousRetriesChargeStockOnlyOnce() throws Exception {
+        assertLastPortionRace("last-portion-retry", true);
+    }
+
+    @Test
+    void sixIndependentOrdersCompeteForTheLastPortion() throws Exception {
+        assertLastPortionRace("last-portion-sale", false);
+    }
+
+    private void assertLastPortionRace(String slug, boolean replay) throws Exception {
+        var owner = TestHttp.register(rest, objectMapper, "Cocina", slug + "@test.com", slug);
+        long product = createProduct(owner, "Última porción", 12000);
+        sql.update("update products set track_stock = true, stock_quantity = 1 where id = ?", product);
+        int clients = 6;
+        String key = UUID.randomUUID().toString();
+        var ready = new CountDownLatch(clients);
+        var start = new CountDownLatch(1);
+        var pool = Executors.newFixedThreadPool(clients);
+        List<Future<ResponseEntity<JsonNode>>> requests = new ArrayList<>();
+        try {
+            for (int i = 0; i < clients; i++) {
+                var body = Map.<String, Object>of("customerName", "Cliente",
+                        "requestId", replay ? key : UUID.randomUUID().toString(),
+                        "items", List.of(Map.of("productId", product, "quantity", 1)));
+                requests.add(pool.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Tiempo de espera");
+                    return postPublicOrder(slug, body);
+                }));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            List<Long> accepted = new ArrayList<>();
+            for (var request : requests) {
+                var response = request.get(20, TimeUnit.SECONDS);
+                if (response.getStatusCode().value() == 201) {
+                    accepted.add(response.getBody().at("/data/id").longValue());
+                } else {
+                    assertThat(response.getStatusCode().value()).isEqualTo(400);
+                }
+            }
+            assertThat(accepted).hasSize(replay ? clients : 1);
+            assertThat(accepted.stream().distinct().toList()).hasSize(1);
+            assertThat(sql.queryForObject("select count(*) from orders where restaurant_id = (select restaurant_id from products where id = ?)", Integer.class, product)).isOne();
+            assertThat(sql.queryForObject("select stock_quantity from products where id = ?", Integer.class, product)).isZero();
+            assertThat(sql.queryForObject("select count(*) from stock_movements where product_id = ? and quantity = -1", Integer.class, product)).isOne();
+            assertThat(sql.queryForObject("select count(*) from order_status_history where order_id = ?", Integer.class, accepted.getFirst())).isOne();
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void publicOrders_concurrentCreation_hasUniqueNumbers() throws Exception {
         // Crear restaurante con producto y lanzar 2 pedidos concurrentes: el lock
         // pesimista en la fila del restaurante serializa el consecutivo.
@@ -611,6 +669,8 @@ class OrdersIT extends BaseIntegrationTest {
         // Seguimiento sin autenticación con el código → 200 con el mismo pedido
         ResponseEntity<JsonNode> tracked = rest.getForEntity(
                 "/api/public/orders/track/" + trackingCode, JsonNode.class);
+        assertThat(created.getHeaders().getCacheControl()).contains("no-store");
+        assertThat(tracked.getHeaders().getCacheControl()).contains("no-store");
         assertThat(tracked.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(tracked.getBody().get("data").get("orderNumber").asText())
                 .isEqualTo(created.getBody().get("data").get("orderNumber").asText());
